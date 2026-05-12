@@ -713,6 +713,10 @@ async function loadCumplimiento() {
       return
     }
 
+    // Cache de items por ID para el modal de edición
+    window._planItemsCache = {}
+    for (const item of items) window._planItemsCache[item._id] = item
+
     // Tarjetas por grupo de equipo
     let html = '<div class="plan-cards-grid">'
     for (const item of items) {
@@ -755,7 +759,7 @@ async function loadCumplimiento() {
           <div style="display:flex;align-items:center;gap:8px">
             <span class="period-badge" style="background:${pColor}15;color:${pColor};border:1px solid ${pColor}40">${PERIOD_LABEL[item.periodicidad]||item.periodicidad}</span>
             ${usuarioActual?.rol === 'admin' ? `
-              <button class="btn-icon-sm" style="color:var(--primary-color)" onclick="abrirModalEditarPeriod('${item._id}','${escHtml(item.equipo)}','${item.periodicidad}')" title="Cambiar periodicidad">✏</button>
+              <button class="btn-icon-sm" style="color:var(--primary-color)" onclick="abrirModalEditarPeriod('${item._id}')" title="Editar equipo">✏</button>
               <button class="btn-icon-sm" style="color:var(--danger-color)" onclick="eliminarItemPlan('${item._id}')" title="Eliminar equipo">✕</button>
             ` : ''}
           </div>
@@ -1068,10 +1072,40 @@ async function guardarManual() {
   finally { if (btn) { btn.disabled = false; btn.textContent = 'Guardar Verificación' } }
 }
 
-// ─── Modal: Cambiar periodicidad (versionado) ─────────────────────────────────
-function abrirModalEditarPeriod(id, tareaLabel, periodActual) {
+// ─── Modal: Editar equipo del plan ────────────────────────────────────────────
+function _crearChip(texto, onRemove) {
+  const chip = document.createElement('span')
+  chip.className = 'tarea-chip'
+  chip.style.cssText = 'display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:20px;background:#EEF2FF;color:#3730A3;font-size:12px;font-weight:500'
+  chip.dataset.valor = texto
+  chip.innerHTML = `${escHtml(texto)} <button type="button" style="background:none;border:none;cursor:pointer;font-size:14px;line-height:1;color:#6B7280;padding:0" onclick="this.parentElement.remove()">×</button>`
+  return chip
+}
+
+function _getChipValues(containerId) {
+  return Array.from(document.getElementById(containerId).querySelectorAll('[data-valor]'))
+    .map(c => c.dataset.valor)
+}
+
+function abrirModalEditarPeriod(id) {
+  const item = (window._planItemsCache || {})[id]
+  if (!item) return showNotification('Datos del ítem no disponibles. Recargá la página.', 'error')
+
   document.getElementById('ep-item-id').value = id
-  document.getElementById('ep-tarea-label').textContent = tareaLabel
+  document.getElementById('ep-tarea-label').textContent = item.equipo
+
+  // Poblar tareas chips
+  const tareasContainer = document.getElementById('ep-tareas-chips')
+  tareasContainer.innerHTML = ''
+  for (const t of (item.tareas || [])) tareasContainer.appendChild(_crearChip(t))
+
+  // Poblar unidades chips
+  const unidadesContainer = document.getElementById('ep-unidades-chips')
+  unidadesContainer.innerHTML = ''
+  for (const u of (item.unidades || [])) unidadesContainer.appendChild(_crearChip(u))
+
+  // Periodicidad y "Aplicar desde"
+  const periodActual = item.periodicidad
   document.getElementById('ep-periodicidad').value = periodActual
 
   const ahora = new Date()
@@ -1079,19 +1113,51 @@ function abrirModalEditarPeriod(id, tareaLabel, periodActual) {
   const sel   = document.getElementById('ep-desde')
   sel.innerHTML = ''
   for (let m = 0; m < 12; m++) {
-    const val     = `${anio}-${String(m + 1).padStart(2, '0')}-01`
+    const val      = `${anio}-${String(m + 1).padStart(2, '0')}-01`
     const esPasado = m < ahora.getMonth() && anio <= ahora.getFullYear()
     sel.innerHTML += `<option value="${val}"${m === ahora.getMonth() ? ' selected' : ''}>${MESES_NOMBRES[m]} ${anio}${esPasado ? ' (pasado)' : ''}</option>`
   }
 
-  actualizarInfoEditarPeriod(periodActual, periodActual)
-  document.getElementById('ep-periodicidad').onchange = function () { actualizarInfoEditarPeriod(periodActual, this.value) }
-  document.getElementById('ep-desde').onchange = function () { actualizarInfoEditarPeriod(periodActual, document.getElementById('ep-periodicidad').value) }
+  document.getElementById('ep-info').style.display = 'none'
+  document.getElementById('ep-periodicidad').onchange = function () {
+    if (this.value !== periodActual) {
+      actualizarInfoEditarPeriod(periodActual, this.value)
+      document.getElementById('ep-info').style.display = 'block'
+    } else {
+      document.getElementById('ep-info').style.display = 'none'
+    }
+  }
+  document.getElementById('ep-desde').onchange = function () {
+    const pNuevo = document.getElementById('ep-periodicidad').value
+    if (pNuevo !== periodActual) actualizarInfoEditarPeriod(periodActual, pNuevo)
+  }
   document.getElementById('modal-editar-period').style.display = 'flex'
 }
 
+function agregarTareaEdicion() {
+  const input = document.getElementById('ep-nueva-tarea')
+  const val   = input.value.trim()
+  if (!val) return
+  const existentes = _getChipValues('ep-tareas-chips')
+  if (existentes.includes(val)) return showNotification('Esa tarea ya existe', 'error')
+  document.getElementById('ep-tareas-chips').appendChild(_crearChip(val))
+  input.value = ''
+  input.focus()
+}
+
+function agregarUnidadEdicion() {
+  const input = document.getElementById('ep-nueva-unidad')
+  const val   = input.value.trim()
+  if (!val) return
+  const existentes = _getChipValues('ep-unidades-chips')
+  if (existentes.includes(val)) return showNotification('Esa unidad ya existe', 'error')
+  document.getElementById('ep-unidades-chips').appendChild(_crearChip(val))
+  input.value = ''
+  input.focus()
+}
+
 function actualizarInfoEditarPeriod(periodViejo, periodNuevo) {
-  const desde = document.getElementById('ep-desde')?.value
+  const desde  = document.getElementById('ep-desde')?.value
   const mesIdx = desde ? new Date(desde + 'T12:00:00').getMonth() : new Date().getMonth()
   const PERIOD_LBL = { diario:'Diario', semanal:'Semanal', quincenal:'Quincenal', mensual:'Mensual', trimestral:'Trimestral', semestral:'Semestral', anual:'Anual' }
   const info = document.getElementById('ep-info')
@@ -1109,9 +1175,23 @@ async function guardarCambioPeriod() {
   const id           = document.getElementById('ep-item-id').value
   const periodicidad = document.getElementById('ep-periodicidad').value
   const aplicarDesde = document.getElementById('ep-desde').value
+  const tareas       = _getChipValues('ep-tareas-chips')
+  const unidades     = _getChipValues('ep-unidades-chips')
+
+  const item = (window._planItemsCache || {})[id]
+  const periodActual = item?.periodicidad
+
+  const cambioPeriod = periodicidad !== periodActual
+
   try {
-    await apiFetch(`/plan/${id}`, { method: 'PUT', body: JSON.stringify({ periodicidad, aplicarDesde }) })
-    showNotification('Periodicidad actualizada. El historial anterior no cambió.', 'success')
+    await apiFetch(`/plan/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(cambioPeriod
+        ? { periodicidad, aplicarDesde, tareas, unidades }
+        : { tareas, unidades }
+      )
+    })
+    showNotification('Cambios guardados.', 'success')
     cerrarModalEditarPeriod()
     loadCumplimiento()
   } catch (err) { showNotification('Error: ' + err.message, 'error') }

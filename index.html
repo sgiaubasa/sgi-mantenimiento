@@ -602,45 +602,69 @@
         </div>
     </div>
 
-    <!-- ═══ MODAL: Cambiar Periodicidad (con versión) ════════════════════════ -->
+    <!-- ═══ MODAL: Editar Equipo del Plan ══════════════════════════════════════ -->
     <div id="modal-editar-period" class="modal-overlay" style="display:none">
-        <div class="modal-card" style="max-width:480px;width:95%">
+        <div class="modal-card" style="max-width:580px;width:95%;max-height:90vh;overflow-y:auto">
             <div class="modal-header">
                 <div class="modal-icon" style="background:#FEF3C7">
                     <svg viewBox="0 0 24 24" fill="none" stroke="#D97706" stroke-width="2" width="22" height="22"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                 </div>
                 <div>
-                    <h2 style="font-size:17px">Cambiar Periodicidad</h2>
+                    <h2 style="font-size:17px">Editar Equipo del Plan</h2>
                     <p id="ep-tarea-label" style="font-size:13px;color:var(--text-secondary);margin-top:2px"></p>
                 </div>
             </div>
             <input type="hidden" id="ep-item-id">
             <div class="modal-body" style="display:flex;flex-direction:column;gap:16px">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Nueva periodicidad *</label>
-                        <select id="ep-periodicidad">
-                            <option value="diario">Diario</option>
-                            <option value="semanal">Semanal</option>
-                            <option value="quincenal">Quincenal</option>
-                            <option value="mensual">Mensual</option>
-                            <option value="trimestral">Trimestral</option>
-                            <option value="semestral">Semestral</option>
-                            <option value="anual">Anual</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Aplicar desde *</label>
-                        <select id="ep-desde">
-                            <!-- Options populated by JS -->
-                        </select>
-                        <small class="helper-text">Los meses anteriores conservan la periodicidad actual.</small>
+
+                <!-- Ítems a verificar -->
+                <div class="form-group">
+                    <label style="font-size:13px;font-weight:600">Ítems a verificar</label>
+                    <div id="ep-tareas-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 6px"></div>
+                    <div style="display:flex;gap:8px">
+                        <input type="text" id="ep-nueva-tarea" placeholder="Nueva tarea..." style="flex:1;font-size:13px;padding:7px 12px;border-radius:8px;border:1px solid #E0E5F2;background:var(--bg-color)" onkeydown="if(event.key==='Enter'){event.preventDefault();agregarTareaEdicion()}">
+                        <button type="button" class="btn-secondary btn-sm" onclick="agregarTareaEdicion()" style="white-space:nowrap">+ Agregar</button>
                     </div>
                 </div>
-                <div id="ep-info" style="background:var(--warning-light);border:1.5px solid var(--warning-color);border-radius:10px;padding:12px 16px;font-size:13px;color:#7a5c00;line-height:1.5"></div>
+
+                <!-- Unidades -->
+                <div class="form-group">
+                    <label style="font-size:13px;font-weight:600">Unidades individuales</label>
+                    <div id="ep-unidades-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 6px"></div>
+                    <div style="display:flex;gap:8px">
+                        <input type="text" id="ep-nueva-unidad" placeholder="Ej: CC 05..." style="flex:1;font-size:13px;padding:7px 12px;border-radius:8px;border:1px solid #E0E5F2;background:var(--bg-color)" onkeydown="if(event.key==='Enter'){event.preventDefault();agregarUnidadEdicion()}">
+                        <button type="button" class="btn-secondary btn-sm" onclick="agregarUnidadEdicion()" style="white-space:nowrap">+ Agregar</button>
+                    </div>
+                </div>
+
+                <!-- Periodicidad con versión -->
+                <div style="border-top:1px solid #E0E5F2;padding-top:14px">
+                    <label style="font-size:13px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.4px;display:block;margin-bottom:10px">Cambiar periodicidad</label>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Nueva periodicidad</label>
+                            <select id="ep-periodicidad">
+                                <option value="diario">Diario</option>
+                                <option value="semanal">Semanal</option>
+                                <option value="quincenal">Quincenal</option>
+                                <option value="mensual">Mensual</option>
+                                <option value="trimestral">Trimestral</option>
+                                <option value="semestral">Semestral</option>
+                                <option value="anual">Anual</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Aplicar desde</label>
+                            <select id="ep-desde"></select>
+                            <small class="helper-text">Meses anteriores conservan la periodicidad actual.</small>
+                        </div>
+                    </div>
+                    <div id="ep-info" style="background:var(--warning-light);border:1.5px solid var(--warning-color);border-radius:10px;padding:10px 14px;font-size:12px;color:#7a5c00;line-height:1.5;display:none"></div>
+                </div>
+
                 <div class="form-actions modal-actions" style="gap:10px;margin-top:4px">
                     <button type="button" class="btn-secondary" onclick="cerrarModalEditarPeriod()">Cancelar</button>
-                    <button type="button" class="btn-primary" onclick="guardarCambioPeriod()">Aplicar cambio</button>
+                    <button type="button" class="btn-primary" onclick="guardarCambioPeriod()">Guardar cambios</button>
                 </div>
             </div>
         </div>
