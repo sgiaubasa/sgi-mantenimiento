@@ -875,6 +875,27 @@ body {
 .resp-badge.resp-supervisor        { background: #FCE7F3; color: #9D174D; }
 .resp-badge.resp-proveedor-externo { background: #FEE2E2; color: #991B1B; }
 
+/* ─── Pestañas del modal de plan ────────────────────────────── */
+.plan-tab {
+    background: none;
+    border: none;
+    padding: 10px 20px;
+    font-family: var(--font-family);
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+    margin-bottom: -2px;
+}
+.plan-tab:hover { color: var(--primary-color); }
+.plan-tab.active {
+    color: var(--primary-color);
+    font-weight: 600;
+    border-bottom-color: var(--primary-color);
+}
+
 /* ─── Tabla Excel Plan de Mantenimiento ─────────────────────── */
 .plan-toolbar {
     display: flex;

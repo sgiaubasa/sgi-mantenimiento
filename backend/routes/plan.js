@@ -35,36 +35,33 @@ router.get('/', authMW, async (req, res) => {
 // ─── GET /plan/cumplimiento?estacion=&anio= ───────────────────────────────────
 router.get('/cumplimiento', authMW, async (req, res) => {
   try {
-    const anio     = Number(req.query.anio) || new Date().getFullYear()
-    const estacion = req.query.estacion
+    const anio      = Number(req.query.anio) || new Date().getFullYear()
+    const estacion  = req.query.estacion
     const mesActual = new Date().getMonth() // 0-indexed
 
+    // Traemos TODOS los ítems del año (activos, incluyendo versiones vencidas)
     const filtro = { anio, activo: true }
     if (estacion) filtro.estacion = estacion
     const items = await ItemPlan.find(filtro).lean()
 
     if (!items.length) return res.json({ resultado: [], porEquipo: [] })
 
-    // Inspecciones reales del año por mes
+    // Inspecciones reales del año, contadas por mes y por codigoPrefix
     const desde = new Date(anio, 0, 1)
     const hasta = new Date(anio + 1, 0, 1)
     const filtroInsp = { createdAt: { $gte: desde, $lt: hasta } }
     if (estacion) filtroInsp.estacion = estacion
-    const inspecciones = await Inspeccion.find(filtroInsp).select('createdAt equipos estacion').lean()
+    const inspecciones = await Inspeccion.find(filtroInsp).select('createdAt equipos').lean()
 
-    // Inspecciones por mes, y por mes+prefijo (para cruzar con codigoPrefix del plan)
-    // ejecutadoPorMesPrefix: { 'enero': { 'CC': 2, 'AA': 1 } }  → inspecciones que contenían ese prefijo
-    // ejecutadoPorMes: { 'enero': 3 }  → total inspecciones (fallback si item no tiene codigoPrefix)
-    const ejecutadoPorMesPrefix = {}
-    const ejecutadoPorMes = {}
+    const ejecutadoPorMesPrefix = {} // { 'enero': { 'CC': 2 } }
+    const ejecutadoPorMes = {}       // { 'enero': 3 } — fallback sin prefijo
     for (const insp of inspecciones) {
       const mes = MESES[new Date(insp.createdAt).getMonth()]
       ejecutadoPorMes[mes] = (ejecutadoPorMes[mes] || 0) + 1
       if (!ejecutadoPorMesPrefix[mes]) ejecutadoPorMesPrefix[mes] = {}
       const prefijosInsp = new Set()
       for (const eq of (insp.equipos || [])) {
-        // Extrae prefijo: "CC 01" → "CC", "AA-01" → "AA"
-        const prefix = (eq.codigo || '').replace(/[-\s].*/, '').toUpperCase()
+        const prefix = (eq.codigo || '').replace(/[-\s\d].*/, '').toUpperCase()
         if (prefix) prefijosInsp.add(prefix)
       }
       for (const p of prefijosInsp) {
@@ -72,14 +69,20 @@ router.get('/cumplimiento', authMW, async (req, res) => {
       }
     }
 
-    // Calcular planificado y ejecutado por mes.
-    // Cada ítem del plan contribuye según su periodicidad.
-    // Si tiene codigoPrefix, el ejecutado se cuenta por inspecciones que incluyeron ese prefijo.
-    // Si no tiene codigoPrefix, se usa el total de inspecciones del mes (fallback).
+    // Por cada mes, filtra los ítems vigentes en ese mes (soporte a versionado de periodicidad)
     const resultado = MESES.map((mes, mesIdx) => {
-      let planificado = 0
-      let ejecutado   = 0
-      for (const item of items) {
+      const primerDia = new Date(anio, mesIdx, 1)
+      const ultimoDia = new Date(anio, mesIdx + 1, 0)
+
+      // Ítem vigente en este mes: vigenciaDesde <= ultimoDia Y (vigenciaHasta nulo O >= primerDia)
+      const itemsMes = items.filter(item => {
+        const desde = item.vigenciaDesde ? new Date(item.vigenciaDesde) : new Date(anio, 0, 1)
+        const hasta  = item.vigenciaHasta ? new Date(item.vigenciaHasta) : null
+        return desde <= ultimoDia && (hasta === null || hasta >= primerDia)
+      })
+
+      let planificado = 0, ejecutado = 0
+      for (const item of itemsMes) {
         const frec = frecuenciaMensual(item.periodicidad, mesIdx, anio)
         if (frec === 0) continue
         planificado += frec
@@ -89,34 +92,27 @@ router.get('/cumplimiento', authMW, async (req, res) => {
           ejecutado += ejecutadoPorMes[mes] || 0
         }
       }
-      return {
-        mes,
-        planificado,
-        ejecutado,
-        porcentaje: planificado > 0 ? Math.round((ejecutado / planificado) * 100) : null
-      }
+      return { mes, planificado, ejecutado, porcentaje: planificado > 0 ? Math.round((ejecutado / planificado) * 100) : null }
     })
 
-    // Agrupar por equipo para mostrar tabla detalle
+    // Para la tabla del plan: mostrar solo ítems actualmente vigentes (sin vigenciaHasta o vigenciaHasta futura)
+    const hoy = new Date()
+    const itemsVigentes = items.filter(item => !item.vigenciaHasta || new Date(item.vigenciaHasta) >= hoy)
     const equiposMap = {}
-    for (const item of items) {
+    for (const item of itemsVigentes) {
       if (!equiposMap[item.equipo]) equiposMap[item.equipo] = []
       equiposMap[item.equipo].push(item)
     }
     const porEquipo = Object.entries(equiposMap).map(([equipo, tareas]) => ({
       equipo,
       tareas: tareas.map(t => ({
-        _id: t._id,
-        tarea:            t.tarea,
-        responsable:      t.responsable,
-        proveedorExterno: t.proveedorExterno,
-        periodicidad:     t.periodicidad,
-        codigoPrefix:     t.codigoPrefix
+        _id: t._id, tarea: t.tarea, responsable: t.responsable,
+        proveedorExterno: t.proveedorExterno, periodicidad: t.periodicidad,
+        codigoPrefix: t.codigoPrefix, vigenciaDesde: t.vigenciaDesde
       }))
     }))
 
-    const mesData = resultado[mesActual]
-    res.json({ resultado, porEquipo, mesActual: mesData })
+    res.json({ resultado, porEquipo, mesActual: resultado[mesActual] })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
@@ -142,11 +138,37 @@ router.post('/bulk', authMW, async (req, res) => {
 })
 
 // ─── PUT /plan/:id ────────────────────────────────────────────────────────────
+// Si viene { periodicidad, aplicarDesde }: versiona el cambio (cierra el ítem actual y crea uno nuevo)
+// Si no viene aplicarDesde: edición simple del ítem actual
 router.put('/:id', authMW, async (req, res) => {
   if (req.usuario.rol !== 'admin') return res.status(403).json({ error: 'Solo administradores' })
   try {
-    const item = await ItemPlan.findByIdAndUpdate(req.params.id, req.body, { new: true })
-    if (!item) return res.status(404).json({ error: 'Item no encontrado' })
+    const { periodicidad, aplicarDesde, ...resto } = req.body
+    const itemActual = await ItemPlan.findById(req.params.id)
+    if (!itemActual) return res.status(404).json({ error: 'Item no encontrado' })
+
+    if (periodicidad && aplicarDesde) {
+      // Versionado: cierra el item actual hasta el día anterior al aplicarDesde
+      const fechaDesde   = new Date(aplicarDesde + 'T00:00:00')
+      const fechaHasta   = new Date(fechaDesde)
+      fechaHasta.setDate(fechaHasta.getDate() - 1) // día anterior
+
+      itemActual.vigenciaHasta = fechaHasta
+      await itemActual.save()
+
+      // Crea nueva versión con nueva periodicidad, vigente desde la fecha elegida
+      const { _id, createdAt, updatedAt, __v, ...datosBase } = itemActual.toObject()
+      const nuevoItem = await ItemPlan.create({
+        ...datosBase,
+        periodicidad,
+        vigenciaDesde: fechaDesde,
+        vigenciaHasta: null
+      })
+      return res.status(201).json(nuevoItem)
+    }
+
+    // Edición simple (sin versionado)
+    const item = await ItemPlan.findByIdAndUpdate(req.params.id, { periodicidad, ...resto }, { new: true })
     res.json(item)
   } catch (e) { res.status(400).json({ error: e.message }) }
 })

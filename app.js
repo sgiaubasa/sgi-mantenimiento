@@ -702,7 +702,10 @@ async function loadCumplimiento() {
           <td class="col-tarea">${t.tarea}</td>
           <td class="col-resp"><span class="resp-badge resp-${(t.responsable||'').toLowerCase()}" title="${respLabel}">${t.responsable}</span></td>
           ${periodos.map(p => `<td class="col-period">${t.periodicidad === p ? '<span class="period-check">✓</span>' : ''}</td>`).join('')}
-          ${usuarioActual?.rol === 'admin' ? `<td class="col-acc"><button class="btn-icon-sm" onclick="eliminarItemPlan('${t._id}')" title="Eliminar">✕</button></td>` : ''}
+          ${usuarioActual?.rol === 'admin' ? `<td class="col-acc" style="white-space:nowrap">
+            <button class="btn-icon-sm" style="color:var(--primary-color)" onclick="abrirModalEditarPeriod('${t._id}','${(t.tarea||'').replace(/'/g,"\\'")}','${t.periodicidad}')" title="Cambiar periodicidad">✏</button>
+            <button class="btn-icon-sm" onclick="eliminarItemPlan('${t._id}')" title="Eliminar">✕</button>
+          </td>` : ''}
         </tr>`
       })
     }
@@ -741,21 +744,33 @@ document.getElementById('plan-anio')?.addEventListener('change', loadCumplimient
 document.getElementById('plan-estacion')?.addEventListener('change', loadCumplimiento)
 
 // ─── Modal ítem del plan ──────────────────────────────────────────────────────
+const MESES_NOMBRES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
+
 function abrirModalItemPlan() {
-  document.getElementById('item-plan-id').value = ''
-  document.getElementById('modal-item-plan-titulo').textContent = 'Agregar Tarea al Plan'
-  document.getElementById('form-item-plan')?.reset()
+  switchPlanTab('individual')
   document.getElementById('ip-periodicidad').value = 'mensual'
   document.getElementById('grupo-pex-plan').style.display = 'none'
+  document.getElementById('ip-tarea').value = ''
+  document.getElementById('ip-tareas-bulk').value = ''
+  document.getElementById('bulk-preview').style.display = 'none'
   const est  = document.getElementById('plan-estacion')?.value
   const anio = document.getElementById('plan-anio')?.value
   if (est)  document.getElementById('ip-estacion').value = est
   if (anio) document.getElementById('ip-anio').value     = anio
   document.getElementById('modal-item-plan').style.display = 'flex'
 }
+
 function cerrarModalItemPlan() {
   document.getElementById('modal-item-plan').style.display = 'none'
 }
+
+function switchPlanTab(tab) {
+  document.getElementById('panel-individual').style.display = tab === 'individual' ? 'block' : 'none'
+  document.getElementById('panel-multiple').style.display   = tab === 'multiple'   ? 'block' : 'none'
+  document.getElementById('tab-individual').classList.toggle('active', tab === 'individual')
+  document.getElementById('tab-multiple').classList.toggle('active', tab === 'multiple')
+}
+
 function toggleProveedorItemPlan(val) {
   const g = document.getElementById('grupo-pex-plan')
   const i = document.getElementById('ip-proveedor')
@@ -763,42 +778,43 @@ function toggleProveedorItemPlan(val) {
   if (i) i.required = val === 'PEX'
 }
 
-function buildItemPlanBody() {
+function buildItemPlanBase() {
   const resp = document.getElementById('ip-responsable').value
   return {
     estacion:         document.getElementById('ip-estacion').value,
     anio:             parseInt(document.getElementById('ip-anio').value, 10),
     equipo:           document.getElementById('ip-equipo').value.trim(),
     codigoPrefix:     document.getElementById('ip-codigo').value.trim().toUpperCase() || undefined,
-    tarea:            document.getElementById('ip-tarea').value.trim(),
     responsable:      resp,
     proveedorExterno: resp === 'PEX' ? document.getElementById('ip-proveedor').value.trim() : null,
     periodicidad:     document.getElementById('ip-periodicidad').value
   }
 }
 
-document.getElementById('form-item-plan')?.addEventListener('submit', async e => {
-  e.preventDefault()
-  const body = buildItemPlanBody()
-  if (body.responsable === 'PEX' && !body.proveedorExterno) { showNotification('Ingresá el nombre del proveedor.', 'error'); return }
+async function guardarItemPlanIndividual() {
+  const tarea = document.getElementById('ip-tarea').value.trim()
+  if (!tarea) { showNotification('Ingresá la tarea.', 'error'); return }
+  const base = buildItemPlanBase()
+  if (!base.equipo) { showNotification('Ingresá el equipo.', 'error'); return }
+  if (base.responsable === 'PEX' && !base.proveedorExterno) { showNotification('Ingresá el nombre del proveedor.', 'error'); return }
   try {
-    await apiFetch('/plan', { method: 'POST', body: JSON.stringify(body) })
+    await apiFetch('/plan', { method: 'POST', body: JSON.stringify({ ...base, tarea }) })
     showNotification('Tarea agregada al plan.')
     cerrarModalItemPlan()
     loadCumplimiento()
   } catch (err) { showNotification('Error: ' + err.message, 'error') }
-})
+}
 
 async function guardarYAgregarOtro() {
-  const body = buildItemPlanBody()
-  if (body.responsable === 'PEX' && !body.proveedorExterno) { showNotification('Ingresá el nombre del proveedor.', 'error'); return }
-  if (!body.equipo || !body.tarea) { showNotification('Completá Equipo y Tarea.', 'error'); return }
+  const tarea = document.getElementById('ip-tarea').value.trim()
+  const base  = buildItemPlanBase()
+  if (!base.equipo || !tarea) { showNotification('Completá Equipo y Tarea.', 'error'); return }
+  if (base.responsable === 'PEX' && !base.proveedorExterno) { showNotification('Ingresá el nombre del proveedor.', 'error'); return }
   const btn = document.getElementById('btn-guardar-otro')
   btn.disabled = true; btn.textContent = 'Guardando...'
   try {
-    await apiFetch('/plan', { method: 'POST', body: JSON.stringify(body) })
+    await apiFetch('/plan', { method: 'POST', body: JSON.stringify({ ...base, tarea }) })
     showNotification('Tarea guardada. Podés agregar otra.', 'success')
-    // Limpiar solo la tarea, mantener equipo/estacion/año/responsable/periodicidad
     document.getElementById('ip-tarea').value = ''
     document.getElementById('ip-tarea').focus()
     loadCumplimiento()
@@ -806,11 +822,86 @@ async function guardarYAgregarOtro() {
   finally { btn.disabled = false; btn.textContent = 'Guardar y agregar otro' }
 }
 
+document.getElementById('ip-tareas-bulk')?.addEventListener('input', function () {
+  const tareas = this.value.split('\n').map(t => t.trim()).filter(Boolean)
+  const prev   = document.getElementById('bulk-preview')
+  if (!tareas.length) { prev.style.display = 'none'; return }
+  prev.style.display = 'block'
+  prev.innerHTML = `<strong style="color:var(--primary-color)">${tareas.length} tarea${tareas.length > 1 ? 's' : ''} a crear:</strong> ${tareas.map(t => `<span style="display:inline-block;background:#fff;border-radius:6px;padding:2px 8px;margin:2px;font-size:12px">${t}</span>`).join('')}`
+})
+
+async function guardarMultiplesTareas() {
+  const raw    = document.getElementById('ip-tareas-bulk').value
+  const tareas = raw.split('\n').map(t => t.trim()).filter(Boolean)
+  if (!tareas.length) { showNotification('Ingresá al menos una tarea.', 'error'); return }
+  const base = buildItemPlanBase()
+  if (!base.equipo) { showNotification('Ingresá el equipo.', 'error'); return }
+  if (base.responsable === 'PEX' && !base.proveedorExterno) { showNotification('Ingresá el nombre del proveedor.', 'error'); return }
+  const btn = document.getElementById('btn-guardar-bulk')
+  btn.disabled = true; btn.textContent = 'Guardando...'
+  try {
+    const items = tareas.map(tarea => ({ ...base, tarea }))
+    await apiFetch('/plan/bulk', { method: 'POST', body: JSON.stringify({ items }) })
+    showNotification(`${tareas.length} tarea${tareas.length > 1 ? 's' : ''} agregadas al plan.`, 'success')
+    cerrarModalItemPlan()
+    loadCumplimiento()
+  } catch (err) { showNotification('Error: ' + err.message, 'error') }
+  finally { btn.disabled = false; btn.textContent = 'Guardar todas' }
+}
+
 async function eliminarItemPlan(id) {
   if (!confirm('¿Eliminar esta tarea del plan?')) return
   try {
     await apiFetch(`/plan/${id}`, { method: 'DELETE' })
     showNotification('Tarea eliminada.')
+    loadCumplimiento()
+  } catch (err) { showNotification('Error: ' + err.message, 'error') }
+}
+
+// ─── Modal: Cambiar periodicidad (versionado) ─────────────────────────────────
+function abrirModalEditarPeriod(id, tareaLabel, periodActual) {
+  document.getElementById('ep-item-id').value = id
+  document.getElementById('ep-tarea-label').textContent = tareaLabel
+  document.getElementById('ep-periodicidad').value = periodActual
+
+  const ahora = new Date()
+  const anio  = parseInt(document.getElementById('plan-anio')?.value || ahora.getFullYear(), 10)
+  const sel   = document.getElementById('ep-desde')
+  sel.innerHTML = ''
+  for (let m = ahora.getMonth(); m < 12; m++) {
+    const val = `${anio}-${String(m + 1).padStart(2, '0')}-01`
+    sel.innerHTML += `<option value="${val}">${MESES_NOMBRES[m]} ${anio}</option>`
+  }
+
+  actualizarInfoEditarPeriod(periodActual, periodActual)
+  document.getElementById('ep-periodicidad').onchange = function () { actualizarInfoEditarPeriod(periodActual, this.value) }
+  document.getElementById('ep-desde').onchange = function () { actualizarInfoEditarPeriod(periodActual, document.getElementById('ep-periodicidad').value) }
+  document.getElementById('modal-editar-period').style.display = 'flex'
+}
+
+function actualizarInfoEditarPeriod(periodViejo, periodNuevo) {
+  const desde = document.getElementById('ep-desde')?.value
+  const mesIdx = desde ? new Date(desde + 'T12:00:00').getMonth() : new Date().getMonth()
+  const PERIOD_LBL = { diario:'Diario', semanal:'Semanal', quincenal:'Quincenal', mensual:'Mensual', trimestral:'Trimestral', semestral:'Semestral', anual:'Anual' }
+  const info = document.getElementById('ep-info')
+  if (!info) return
+  info.innerHTML = `Meses anteriores a <strong>${MESES_NOMBRES[mesIdx]}</strong>: conservan <strong>${PERIOD_LBL[periodViejo]||periodViejo}</strong>.<br>
+    Desde <strong>${MESES_NOMBRES[mesIdx]}</strong>: nueva periodicidad <strong>${PERIOD_LBL[periodNuevo]||periodNuevo}</strong>.<br>
+    <span style="font-size:12px;opacity:0.8">El historial de cumplimiento de meses anteriores no cambia.</span>`
+}
+
+function cerrarModalEditarPeriod() {
+  document.getElementById('modal-editar-period').style.display = 'none'
+}
+
+async function guardarCambioPeriod() {
+  const id           = document.getElementById('ep-item-id').value
+  const periodicidad = document.getElementById('ep-periodicidad').value
+  const aplicarDesde = document.getElementById('ep-desde').value
+  try {
+    await apiFetch(`/plan/${id}`, { method: 'PUT', body: JSON.stringify({ periodicidad, aplicarDesde }) })
+    showNotification('Periodicidad actualizada. El historial anterior no cambió.', 'success')
+    cerrarModalEditarPeriod()
     loadCumplimiento()
   } catch (err) { showNotification('Error: ' + err.message, 'error') }
 }

@@ -14,6 +14,9 @@ const itemPlanSchema = new Schema({
   responsable:       { type: String, enum: RESPONSABLES, required: true },
   proveedorExterno:  { type: String, default: null },  // nombre empresa si responsable = PEX
   periodicidad:      { type: String, enum: PERIODICIDADES, required: true },
+  // Versionado: vigenciaDesde/vigenciaHasta permiten cambiar periodicidad sin afectar historial
+  vigenciaDesde:     { type: Date, default: null }, // null = desde inicio del año del plan
+  vigenciaHasta:     { type: Date, default: null }, // null = vigente actualmente
   activo:            { type: Boolean, default: true }
 }, { timestamps: true })
 
