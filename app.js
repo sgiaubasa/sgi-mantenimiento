@@ -955,17 +955,57 @@ async function cargarSelectIAPlan() {
 let planItemsCacheManual = []
 
 async function abrirModalManual() {
+  // Resetear estado del modal
+  document.getElementById('manual-estacion').value       = ''
+  document.getElementById('manual-fecha').value          = new Date().toISOString().split('T')[0]
+  document.getElementById('manual-item-plan').innerHTML  = '<option value="">Primero seleccioná una estación...</option>'
+  document.getElementById('manual-item-plan').disabled   = true
+  document.getElementById('manual-unidades-group').style.display = 'none'
+  document.getElementById('manual-tareas-group').style.display   = 'none'
+  document.getElementById('manual-obs').value            = ''
+  document.getElementById('manual-desvios-lista').innerHTML = ''
+  desvioManualCount  = 0
+  planItemsCacheManual = []
+
+  // Preseleccionar estación si hay una activa en el filtro del plan
+  const estacionActiva = document.getElementById('plan-estacion')?.value
+  if (estacionActiva) {
+    document.getElementById('manual-estacion').value = estacionActiva
+    await cargarEquiposManual()
+  }
+
+  document.getElementById('modal-manual-insp').style.display = 'flex'
+}
+
+async function cargarEquiposManual() {
+  const estacion = document.getElementById('manual-estacion').value
   const anio     = document.getElementById('plan-anio')?.value || new Date().getFullYear()
-  const estacion = document.getElementById('plan-estacion')?.value || ''
-  const params   = new URLSearchParams({ anio })
-  if (estacion) params.append('estacion', estacion)
-  try { planItemsCacheManual = await apiFetch('/plan?' + params) } catch { planItemsCacheManual = [] }
+  const sel      = document.getElementById('manual-item-plan')
 
-  // Solo mostrar ítems con tareas configuradas (excluye datos de prueba)
+  if (!estacion) {
+    sel.innerHTML = '<option value="">Primero seleccioná una estación...</option>'
+    sel.disabled  = true
+    planItemsCacheManual = []
+    document.getElementById('manual-unidades-group').style.display = 'none'
+    document.getElementById('manual-tareas-group').style.display   = 'none'
+    return
+  }
+
+  sel.innerHTML = '<option value="">Cargando...</option>'
+  sel.disabled  = true
+
+  try {
+    const params = new URLSearchParams({ anio, estacion })
+    planItemsCacheManual = await apiFetch('/plan?' + params)
+  } catch {
+    planItemsCacheManual = []
+  }
+
   const itemsConTareas = planItemsCacheManual.filter(i => i.tareas?.length > 0)
+  sel.innerHTML = itemsConTareas.length
+    ? '<option value="">Seleccioná un equipo...</option>'
+    : '<option value="">Sin equipos configurados para esta estación</option>'
 
-  const sel = document.getElementById('manual-item-plan')
-  sel.innerHTML = '<option value="">Seleccioná un equipo...</option>'
   for (const item of itemsConTareas) {
     const opt = document.createElement('option')
     opt.value = item._id
@@ -973,13 +1013,10 @@ async function abrirModalManual() {
     sel.appendChild(opt)
   }
 
-  document.getElementById('manual-fecha').value = new Date().toISOString().split('T')[0]
+  sel.disabled = itemsConTareas.length === 0
+  // Resetear selección de unidades/tareas al cambiar estación
   document.getElementById('manual-unidades-group').style.display = 'none'
   document.getElementById('manual-tareas-group').style.display   = 'none'
-  document.getElementById('manual-obs').value       = ''
-  document.getElementById('manual-desvios-lista').innerHTML = ''
-  desvioManualCount = 0
-  document.getElementById('modal-manual-insp').style.display = 'flex'
 }
 
 function cerrarModalManual() {

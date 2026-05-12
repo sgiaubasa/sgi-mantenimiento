@@ -757,15 +757,27 @@
             <div class="modal-body" style="display:flex;flex-direction:column;gap:16px">
                 <div class="form-row">
                     <div class="form-group">
-                        <label>Equipo del plan *</label>
-                        <select id="manual-item-plan" required onchange="onSelectManualItem(this.value)">
-                            <option value="">Seleccioná un equipo...</option>
+                        <label>Estación *</label>
+                        <select id="manual-estacion" required onchange="cargarEquiposManual()">
+                            <option value="">Seleccioná una estación...</option>
+                            <option value="Berazategui">Berazategui</option>
+                            <option value="Bernal">Bernal</option>
+                            <option value="Dock Sud">Dock Sud</option>
+                            <option value="Hudson">Hudson</option>
+                            <option value="Quilmes">Quilmes</option>
+                            <option value="Samborombón">Samborombón</option>
                         </select>
                     </div>
                     <div class="form-group">
                         <label>Fecha de verificación *</label>
                         <input type="date" id="manual-fecha" required>
                     </div>
+                </div>
+                <div class="form-group">
+                    <label>Equipo del plan *</label>
+                    <select id="manual-item-plan" required onchange="onSelectManualItem(this.value)" disabled>
+                        <option value="">Primero seleccioná una estación...</option>
+                    </select>
                 </div>
                 <div id="manual-unidades-group" style="display:none">
                     <label style="font-size:13px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:8px">Unidades verificadas <small style="font-weight:400">(desmarcá las que NO se verificaron)</small></label>
