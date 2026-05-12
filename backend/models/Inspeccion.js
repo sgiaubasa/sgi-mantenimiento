@@ -15,9 +15,12 @@ const inspeccionSchema = new Schema({
   archivoNombre:         String,
   archivoMimeType:       String,
   equipos:               [equipoSchema],
-  tieneFallas:           { type: Boolean, default: false },
+  tieneFallas:            { type: Boolean, default: false },
   observacionesGenerales: String,
-  desviosGenerados:      [{ type: Schema.Types.ObjectId, ref: 'Desvio' }]
+  tipoVerificacion:       { type: String, enum: ['Personal AUBASA', 'Proveedor Externo'], default: 'Personal AUBASA' },
+  proveedorExterno:       String,   // nombre de la empresa si tipoVerificacion = 'Proveedor Externo'
+  usuarioId:              { type: Schema.Types.ObjectId, ref: 'Usuario' },
+  desviosGenerados:       [{ type: Schema.Types.ObjectId, ref: 'Desvio' }]
 }, { timestamps: true })
 
 module.exports = mongoose.model('Inspeccion', inspeccionSchema)

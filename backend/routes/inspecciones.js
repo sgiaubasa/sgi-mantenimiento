@@ -1,5 +1,6 @@
-const router   = require('express').Router()
-const multer   = require('multer')
+const router     = require('express').Router()
+const multer     = require('multer')
+const authMW     = require('../middleware/auth')
 const Inspeccion = require('../models/Inspeccion')
 const Desvio     = require('../models/Desvio')
 const { analyzeDocument } = require('../services/visionAnalysis')
@@ -22,7 +23,7 @@ const upload = multer({
 // Analiza el documento con IA. No guarda en DB. Devuelve:
 //   - analisis: { estacion, fecha, operador, equipos, observacionesGenerales }
 //   - desviosCierrePosible: desvíos abiertos para equipos que aparecen como "correcto"
-router.post('/analizar', upload.single('archivo'), async (req, res) => {
+router.post('/analizar', authMW, upload.single('archivo'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No se recibió archivo' })
 
   try {
@@ -51,7 +52,7 @@ router.post('/analizar', upload.single('archivo'), async (req, res) => {
 // Body (multipart):
 //   archivo: File
 //   datos:   JSON string { analisis, estacion, desviosNuevos[], desviosCerrar[] }
-router.post('/', upload.single('archivo'), async (req, res) => {
+router.post('/', authMW, upload.single('archivo'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No se recibió archivo' })
 
   let body
@@ -134,25 +135,45 @@ router.post('/', upload.single('archivo'), async (req, res) => {
 })
 
 // ─── GET /kpis ───────────────────────────────────────────────────────────────
-router.get('/kpis', async (req, res) => {
+router.get('/kpis', authMW, async (req, res) => {
   try {
     const now   = new Date()
     const desde = new Date(now.getFullYear(), now.getMonth(), 1)
     const hasta = new Date(now.getFullYear(), now.getMonth() + 1, 1)
     const filtroMes = { createdAt: { $gte: desde, $lt: hasta } }
 
-    const [totalMes, conFallasMes, pendientes, cerradosMes] = await Promise.all([
+    const [totalMes, conFallasMes, pendientes, cerradosMes, inspeccionesMes, desviosDetectadosMes] = await Promise.all([
       Inspeccion.countDocuments(filtroMes),
       Inspeccion.countDocuments({ ...filtroMes, tieneFallas: true }),
       Desvio.countDocuments({ estado: 'Pendiente' }),
-      Desvio.countDocuments({ estado: 'Cerrado', updatedAt: { $gte: desde, $lt: hasta } })
+      Desvio.countDocuments({ estado: 'Cerrado', updatedAt: { $gte: desde, $lt: hasta } }),
+      Inspeccion.find(filtroMes).select('equipos').lean(),
+      Desvio.countDocuments({ createdAt: { $gte: desde, $lt: hasta } })
     ])
 
-    const cumplimiento = totalMes > 0
-      ? Math.round(((totalMes - conFallasMes) / totalMes) * 100)
+    // Indicador de Disponibilidad: ítems conformes / total ítems verificados
+    let itemsConformes = 0, itemsTotal = 0
+    for (const insp of inspeccionesMes) {
+      for (const eq of (insp.equipos || [])) {
+        itemsTotal++
+        if (eq.estado === 'correcto') itemsConformes++
+      }
+    }
+    const disponibilidad = itemsTotal > 0
+      ? Math.round((itemsConformes / itemsTotal) * 100)
       : null
 
-    res.json({ totalMes, conFallasMes, pendientes, cerradosMes, cumplimiento })
+    // Indicador de Eficacia de Desvíos: cerrados / detectados este mes
+    const eficaciaDesvios = desviosDetectadosMes > 0
+      ? Math.round((cerradosMes / desviosDetectadosMes) * 100)
+      : null
+
+    res.json({
+      totalMes, conFallasMes,
+      pendientes, cerradosMes,
+      itemsConformes, itemsTotal, disponibilidad,
+      desviosDetectadosMes, eficaciaDesvios
+    })
   } catch (e) {
     res.status(500).json({ error: e.message })
   }
