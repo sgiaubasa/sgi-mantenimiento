@@ -116,8 +116,8 @@ function iniciarDashboard() {
   }
 
   aplicarFiltroEstaciones()
-  loadKpis()
   inicializarCharts()
+  loadResumen()
 }
 
 function aplicarFiltroEstaciones() {
@@ -141,7 +141,7 @@ const viewMeta = {
   'view-resumen': {
     title: 'Indicadores del Sistema de Gestión Integrado',
     subtitle: 'Monitoreo en tiempo real · Normas ISO 9001 e ISO 39001',
-    onEnter: () => loadKpis()
+    onEnter: () => loadResumen()
   },
   'view-mantenimiento': {
     title: 'Plan de Mantenimiento Preventivo',
@@ -156,7 +156,7 @@ const viewMeta = {
   'view-desvios': {
     title: 'Desvíos Pendientes',
     subtitle: 'Bandeja de gestión y cierre de desvíos abiertos',
-    onEnter: () => loadDesviosPendientes()
+    onEnter: () => { loadDesviosPendientes(); initMesesSelect('hist-mes-desde','hist-mes-hasta'); loadHistorialDesvios() }
   },
   'view-usuarios': {
     title: 'Gestión de Usuarios',
@@ -182,9 +182,31 @@ navItems.forEach(item => {
 })
 
 // ─── KPIs ─────────────────────────────────────────────────────────────────────
-async function loadKpis() {
+// Helper: inicializa dos selects de mes (desde/hasta) para el año actual
+function initMesesSelect(desdeId, hastaId) {
+  const MESES_SHORT = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
+  const anio = new Date().getFullYear()
+  const mesActual = new Date().getMonth()
+  const fromSel = document.getElementById(desdeId)
+  const toSel   = document.getElementById(hastaId)
+  if (!fromSel || !toSel) return
+  // Solo inicializar si están vacíos
+  if (fromSel.options.length) return
+  for (let m = 0; m < 12; m++) {
+    const val = `${anio}-${String(m + 1).padStart(2, '0')}`
+    const lbl = `${MESES_SHORT[m]} ${anio}`
+    fromSel.innerHTML += `<option value="${val}"${m === 0 ? ' selected' : ''}>${lbl}</option>`
+    toSel.innerHTML   += `<option value="${val}"${m === mesActual ? ' selected' : ''}>${lbl}</option>`
+  }
+}
+
+async function loadKpis(estacion = '', desde = '', hasta = '') {
   try {
-    const d = await apiFetch('/inspecciones/kpis')
+    const params = new URLSearchParams()
+    if (estacion) params.append('estacion', estacion)
+    if (desde)    params.append('desde',    desde)
+    if (hasta)    params.append('hasta',    hasta)
+    const d = await apiFetch('/inspecciones/kpis?' + params)
     if (!d) return
 
     setText('kpi-resumen-total',        d.totalMes)
@@ -209,11 +231,114 @@ async function loadKpis() {
     const sub = document.getElementById('kpi-resumen-total-sub')
     if (sub) sub.textContent = d.conFallasMes > 0 ? `${d.conFallasMes} con fallas detectadas` : 'Sin fallas este mes ✓'
 
-    updateGauge(d.disponibilidad)
-
+    // badge de desvíos pendientes en el nav
     const badge = document.getElementById('badge-pendientes')
     if (badge) { badge.textContent = d.pendientes; badge.style.display = d.pendientes > 0 ? 'inline-flex' : 'none' }
   } catch (_) {}
+}
+
+// Calcula el cumplimiento PMP para el rango seleccionado y actualiza el gauge
+async function loadGaugePMP(estacion = '', desde = '', hasta = '') {
+  const anio = new Date().getFullYear()
+  try {
+    const params = new URLSearchParams({ anio })
+    if (estacion) params.append('estacion', estacion)
+    const { resultado } = await apiFetch('/plan/cumplimiento?' + params)
+    if (!resultado?.length) { updateGauge(null); return }
+
+    const MESES_IDX = { enero:0,febrero:1,marzo:2,abril:3,mayo:4,junio:5,
+      julio:6,agosto:7,septiembre:8,octubre:9,noviembre:10,diciembre:11 }
+    const desdeIdx = desde ? Number(desde.split('-')[1]) - 1 : 0
+    const hastaIdx = hasta ? Number(hasta.split('-')[1]) - 1 : new Date().getMonth()
+
+    let totalPlan = 0, totalEjec = 0
+    for (const r of resultado) {
+      const idx = MESES_IDX[r.mes] ?? -1
+      if (idx >= desdeIdx && idx <= hastaIdx) {
+        totalPlan += r.planificado || 0
+        totalEjec += r.ejecutado   || 0
+      }
+    }
+    updateGauge(totalPlan > 0 ? Math.round((totalEjec / totalPlan) * 100) : null)
+  } catch (_) { updateGauge(null) }
+}
+
+// Coordinador del Resumen: aplica todos los filtros en paralelo
+async function loadResumen() {
+  initMesesSelect('resumen-mes-desde', 'resumen-mes-hasta')
+  const estacion = document.getElementById('resumen-estacion')?.value || ''
+  const desde    = document.getElementById('resumen-mes-desde')?.value || ''
+  const hasta    = document.getElementById('resumen-mes-hasta')?.value || ''
+
+  // Etiqueta del período
+  const MESES_SHORT = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
+  const label = document.getElementById('resumen-rango-label')
+  if (label && desde && hasta) {
+    const dm = Number(desde.split('-')[1]) - 1
+    const hm = Number(hasta.split('-')[1]) - 1
+    label.textContent = dm === hm ? MESES_SHORT[dm] : `${MESES_SHORT[dm]} → ${MESES_SHORT[hm]}`
+  }
+
+  await Promise.all([
+    loadKpis(estacion, desde, hasta),
+    loadGaugePMP(estacion, desde, hasta)
+  ])
+  loadBarPMP()
+}
+
+// Historial de desvíos con filtros
+async function loadHistorialDesvios() {
+  const lista = document.getElementById('historial-desvios-lista')
+  if (!lista) return
+  lista.innerHTML = '<p class="empty-state">Cargando...</p>'
+
+  const estacion = document.getElementById('hist-estacion')?.value || ''
+  const estado   = document.getElementById('hist-estado')?.value   || ''
+  const desde    = document.getElementById('hist-mes-desde')?.value || ''
+  const hasta    = document.getElementById('hist-mes-hasta')?.value || ''
+
+  const params = new URLSearchParams()
+  if (estado)   params.append('estado',   estado)
+  if (estacion) params.append('estacion', estacion)
+  if (desde)    params.append('desde',    desde)
+  if (hasta)    params.append('hasta',    hasta)
+
+  try {
+    const desvios = await apiFetch('/desvios?' + params)
+    if (!desvios?.length) {
+      lista.innerHTML = '<div class="empty-state-card"><span style="font-size:2rem">✓</span><p>No hay desvíos con los filtros seleccionados.</p></div>'
+      return
+    }
+    lista.innerHTML = `<div style="overflow-x:auto"><table class="tabla-plan" style="width:100%">
+      <thead><tr>
+        <th>Fecha</th><th>Estación</th><th>Equipo</th>
+        <th>Desvío detectado</th><th>Acción implementar</th>
+        <th style="text-align:center">Estado</th><th>Cierre / Eficacia</th>
+      </tr></thead>
+      <tbody>${desvios.map(d => {
+        const fecha  = new Date(d.createdAt).toLocaleDateString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric' })
+        const est    = d.idInspeccionOrigen?.estacion || '—'
+        const equipo = [d.codigoEquipo, d.descripcionEquipo].filter(Boolean).join(' · ')
+        const badge  = d.estado === 'Cerrado'
+          ? `<span style="background:#DCFCE7;color:#16A34A;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600">Cerrado</span>`
+          : `<span style="background:#FEF3C7;color:#D97706;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600">Pendiente</span>`
+        const cierre = d.fechaRealCierre
+          ? new Date(d.fechaRealCierre).toLocaleDateString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric' }) + (d.eficacia ? ` — ${d.eficacia}` : '')
+          : '—'
+        return `<tr>
+          <td style="white-space:nowrap;font-size:12px">${fecha}</td>
+          <td style="font-size:12px">${est}</td>
+          <td style="font-size:12px;font-weight:500">${escHtml(equipo)}</td>
+          <td style="font-size:12px;color:var(--danger-color)">${escHtml(d.observacionFalla || d.descripcionDesvio || '—')}</td>
+          <td style="font-size:12px">${escHtml(d.accionImplementar || '—')}</td>
+          <td style="text-align:center">${badge}</td>
+          <td style="font-size:12px;white-space:nowrap">${cierre}</td>
+        </tr>`
+      }).join('')}</tbody>
+    </table></div>`
+  } catch (err) {
+    lista.innerHTML = `<p class="empty-state" style="color:var(--danger-color)">Error: ${err.message}</p>`
+  }
 }
 
 function setText(id, val) {

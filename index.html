@@ -93,6 +93,25 @@
 
             <!-- ═══ VIEW: RESUMEN SGI ═══════════════════════════════════════ -->
             <div id="view-resumen" class="view-section active">
+
+                <!-- Barra de filtros del Resumen -->
+                <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px;padding:12px 16px;background:var(--surface-color);border-radius:12px;border:1px solid #E0E5F2">
+                    <span style="font-size:13px;font-weight:600;color:var(--text-secondary);white-space:nowrap">Filtrar por:</span>
+                    <select id="resumen-estacion" onchange="loadResumen()" style="font-size:13px;padding:6px 10px;border-radius:8px;border:1px solid #E0E5F2;background:var(--bg-color)">
+                        <option value="">Todas las estaciones</option>
+                        <option value="Berazategui">Berazategui</option>
+                        <option value="Bernal">Bernal</option>
+                        <option value="Dock Sud">Dock Sud</option>
+                        <option value="Hudson">Hudson</option>
+                        <option value="Quilmes">Quilmes</option>
+                        <option value="Samborombón">Samborombón</option>
+                    </select>
+                    <select id="resumen-mes-desde" onchange="loadResumen()" style="font-size:13px;padding:6px 10px;border-radius:8px;border:1px solid #E0E5F2;background:var(--bg-color)"></select>
+                    <span style="font-size:13px;color:var(--text-secondary)">→</span>
+                    <select id="resumen-mes-hasta" onchange="loadResumen()" style="font-size:13px;padding:6px 10px;border-radius:8px;border:1px solid #E0E5F2;background:var(--bg-color)"></select>
+                    <span id="resumen-rango-label" style="font-size:12px;color:var(--text-secondary);font-style:italic"></span>
+                </div>
+
                 <section class="kpi-grid">
                     <div class="kpi-card">
                         <div class="kpi-icon blue">
@@ -143,15 +162,6 @@
                         <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px">
                             <h3 class="chart-title" style="margin:0">Cumplimiento PMP — Planificado vs Ejecutado</h3>
                             <div style="display:flex;align-items:center;gap:8px">
-                                <select id="resumen-estacion" onchange="loadBarPMP()" style="font-size:12px;padding:4px 10px;border-radius:8px;border:1px solid #E0E5F2;background:var(--bg-color);color:var(--text-primary)">
-                                    <option value="">Todas las estaciones</option>
-                                    <option value="Berazategui">Berazategui</option>
-                                    <option value="Bernal">Bernal</option>
-                                    <option value="Dock Sud">Dock Sud</option>
-                                    <option value="Hudson">Hudson</option>
-                                    <option value="Quilmes">Quilmes</option>
-                                    <option value="Samborombón">Samborombón</option>
-                                </select>
                                 <span id="bar-pmp-label" style="font-size:12px;color:var(--text-secondary);white-space:nowrap"></span>
                             </div>
                         </div>
@@ -389,6 +399,41 @@
                         </div>
                         <div id="desvios-lista">
                             <p class="empty-state">Cargando desvíos...</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Historial de desvíos (para auditoría) -->
+                <section class="form-section">
+                    <div class="chart-card full-width">
+                        <div class="desvios-list-header">
+                            <div>
+                                <h3 class="chart-title">Historial de Desvíos</h3>
+                                <p class="section-desc" style="margin:4px 0 0">Todos los desvíos detectados, abiertos y cerrados.</p>
+                            </div>
+                            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                                <select id="hist-estacion" style="font-size:13px;padding:6px 10px;border-radius:8px;border:1px solid #E0E5F2;background:var(--bg-color)" onchange="loadHistorialDesvios()">
+                                    <option value="">Todas las estaciones</option>
+                                    <option value="Berazategui">Berazategui</option>
+                                    <option value="Bernal">Bernal</option>
+                                    <option value="Dock Sud">Dock Sud</option>
+                                    <option value="Hudson">Hudson</option>
+                                    <option value="Quilmes">Quilmes</option>
+                                    <option value="Samborombón">Samborombón</option>
+                                </select>
+                                <select id="hist-estado" style="font-size:13px;padding:6px 10px;border-radius:8px;border:1px solid #E0E5F2;background:var(--bg-color)" onchange="loadHistorialDesvios()">
+                                    <option value="">Todos</option>
+                                    <option value="Pendiente">Pendientes</option>
+                                    <option value="Cerrado">Cerrados</option>
+                                </select>
+                                <select id="hist-mes-desde" style="font-size:13px;padding:6px 10px;border-radius:8px;border:1px solid #E0E5F2;background:var(--bg-color)" onchange="loadHistorialDesvios()"></select>
+                                <span style="font-size:13px;color:var(--text-secondary)">→</span>
+                                <select id="hist-mes-hasta" style="font-size:13px;padding:6px 10px;border-radius:8px;border:1px solid #E0E5F2;background:var(--bg-color)" onchange="loadHistorialDesvios()"></select>
+                                <button class="btn-secondary btn-sm" onclick="loadHistorialDesvios()">↺</button>
+                            </div>
+                        </div>
+                        <div id="historial-desvios-lista" style="margin-top:12px">
+                            <p class="empty-state">Cargando...</p>
                         </div>
                     </div>
                 </section>

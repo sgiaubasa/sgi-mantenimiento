@@ -210,20 +210,32 @@ router.post('/manual', authMW, upload.single('evidencia'), async (req, res) => {
 })
 
 // ─── GET /kpis ───────────────────────────────────────────────────────────────
+// Acepta ?estacion=&desde=YYYY-MM&hasta=YYYY-MM (ambos inclusive)
 router.get('/kpis', authMW, async (req, res) => {
   try {
-    const now   = new Date()
-    const desde = new Date(now.getFullYear(), now.getMonth(), 1)
-    const hasta = new Date(now.getFullYear(), now.getMonth() + 1, 1)
-    const filtroMes = { createdAt: { $gte: desde, $lt: hasta } }
+    const { estacion, desde: desdeParam, hasta: hastaParam } = req.query
+    const now = new Date()
+
+    const parseMes = (str, defaultDate) => {
+      if (!str) return defaultDate
+      const [y, m] = str.split('-').map(Number)
+      return new Date(y, m - 1, 1)
+    }
+    const desde = parseMes(desdeParam, new Date(now.getFullYear(), now.getMonth(), 1))
+    const hastaBase = parseMes(hastaParam, new Date(now.getFullYear(), now.getMonth(), 1))
+    const hasta = new Date(hastaBase.getFullYear(), hastaBase.getMonth() + 1, 1)
+
+    const filtroFecha = { createdAt: { $gte: desde, $lt: hasta } }
+    const filtroInsp  = estacion ? { ...filtroFecha, estacion } : { ...filtroFecha }
+    const filtroFechaInsp = { ...filtroFecha }
 
     const [totalMes, conFallasMes, pendientes, cerradosMes, inspeccionesMes, desviosDetectadosMes] = await Promise.all([
-      Inspeccion.countDocuments(filtroMes),
-      Inspeccion.countDocuments({ ...filtroMes, tieneFallas: true }),
+      Inspeccion.countDocuments(filtroInsp),
+      Inspeccion.countDocuments({ ...filtroInsp, tieneFallas: true }),
       Desvio.countDocuments({ estado: 'Pendiente' }),
       Desvio.countDocuments({ estado: 'Cerrado', updatedAt: { $gte: desde, $lt: hasta } }),
-      Inspeccion.find(filtroMes).select('equipos').lean(),
-      Desvio.countDocuments({ createdAt: { $gte: desde, $lt: hasta } })
+      Inspeccion.find(filtroInsp).select('equipos').lean(),
+      Desvio.countDocuments(filtroFechaInsp)
     ])
 
     // Indicador de Disponibilidad: ítems conformes / total ítems verificados

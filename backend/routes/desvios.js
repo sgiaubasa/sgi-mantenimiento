@@ -13,15 +13,38 @@ router.get('/pendientes', async (req, res) => {
   }
 })
 
-// ─── GET / ───────────────────────────────────────────────────────────────────
+// ─── GET / ── historial completo con filtros ─────────────────────────────────
+// ?estado=Pendiente|Cerrado  ?estacion=...  ?desde=YYYY-MM  ?hasta=YYYY-MM
 router.get('/', async (req, res) => {
   try {
-    const { estado } = req.query
-    const filter = estado ? { estado } : {}
-    const desvios = await Desvio.find(filter)
+    const { estado, estacion, desde: desdeParam, hasta: hastaParam } = req.query
+    const filter = {}
+    if (estado) filter.estado = estado
+
+    // Filtro por fecha de creación
+    if (desdeParam || hastaParam) {
+      filter.createdAt = {}
+      if (desdeParam) {
+        const [y, m] = desdeParam.split('-').map(Number)
+        filter.createdAt.$gte = new Date(y, m - 1, 1)
+      }
+      if (hastaParam) {
+        const [y, m] = hastaParam.split('-').map(Number)
+        filter.createdAt.$lt  = new Date(y, m, 1)
+      }
+    }
+
+    let desvios = await Desvio.find(filter)
       .populate('idInspeccionOrigen', 'estacion fecha archivoNombre')
       .populate('idInspeccionCierre', 'estacion fecha')
       .sort({ createdAt: -1 })
+      .lean()
+
+    // Filtro por estación (via inspección origen — en memoria, es un conjunto pequeño)
+    if (estacion) {
+      desvios = desvios.filter(d => d.idInspeccionOrigen?.estacion === estacion)
+    }
+
     res.json(desvios)
   } catch (e) {
     res.status(500).json({ error: e.message })
