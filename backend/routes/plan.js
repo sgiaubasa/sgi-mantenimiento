@@ -5,7 +5,6 @@ const Inspeccion = require('../models/Inspeccion')
 
 const MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre']
 
-// Cuántas veces debe aparecer una tarea en un mes según su periodicidad
 function frecuenciaMensual(periodicidad, mes, anio) {
   const diasMes = new Date(anio, mes + 1, 0).getDate()
   switch (periodicidad) {
@@ -20,41 +19,40 @@ function frecuenciaMensual(periodicidad, mes, anio) {
   }
 }
 
-// ─── GET /plan?estacion=&anio= ────────────────────────────────────────────────
+// ─── GET /plan ────────────────────────────────────────────────────────────────
 router.get('/', authMW, async (req, res) => {
   try {
     const { estacion, anio } = req.query
-    const filtro = {}
+    const filtro = { activo: true }
     if (estacion) filtro.estacion = estacion
     if (anio)     filtro.anio    = Number(anio)
-    const items = await ItemPlan.find({ ...filtro, activo: true }).sort({ equipo: 1, tarea: 1 })
+    const items = await ItemPlan.find(filtro).sort({ equipo: 1 })
     res.json(items)
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
-// ─── GET /plan/cumplimiento?estacion=&anio= ───────────────────────────────────
+// ─── GET /plan/cumplimiento ───────────────────────────────────────────────────
 router.get('/cumplimiento', authMW, async (req, res) => {
   try {
     const anio      = Number(req.query.anio) || new Date().getFullYear()
     const estacion  = req.query.estacion
-    const mesActual = new Date().getMonth() // 0-indexed
+    const mesActual = new Date().getMonth()
 
-    // Traemos TODOS los ítems del año (activos, incluyendo versiones vencidas)
     const filtro = { anio, activo: true }
     if (estacion) filtro.estacion = estacion
     const items = await ItemPlan.find(filtro).lean()
 
-    if (!items.length) return res.json({ resultado: [], porEquipo: [] })
+    if (!items.length) return res.json({ resultado: [], items: [] })
 
-    // Inspecciones reales del año, contadas por mes y por codigoPrefix
+    // Inspecciones del año: contar por mes y por codigoPrefix
     const desde = new Date(anio, 0, 1)
-    const hasta = new Date(anio + 1, 0, 1)
+    const hasta  = new Date(anio + 1, 0, 1)
     const filtroInsp = { createdAt: { $gte: desde, $lt: hasta } }
     if (estacion) filtroInsp.estacion = estacion
     const inspecciones = await Inspeccion.find(filtroInsp).select('createdAt equipos').lean()
 
-    const ejecutadoPorMesPrefix = {} // { 'enero': { 'CC': 2 } }
-    const ejecutadoPorMes = {}       // { 'enero': 3 } — fallback sin prefijo
+    const ejecutadoPorMesPrefix = {}
+    const ejecutadoPorMes = {}
     for (const insp of inspecciones) {
       const mes = MESES[new Date(insp.createdAt).getMonth()]
       ejecutadoPorMes[mes] = (ejecutadoPorMes[mes] || 0) + 1
@@ -69,12 +67,12 @@ router.get('/cumplimiento', authMW, async (req, res) => {
       }
     }
 
-    // Por cada mes, filtra los ítems vigentes en ese mes (soporte a versionado de periodicidad)
+    // Planificado = una verificación del equipo completo (no por tarea individual)
+    // Si el item tiene unidades, planificado = frecuencia × cantidad de unidades
     const resultado = MESES.map((mes, mesIdx) => {
       const primerDia = new Date(anio, mesIdx, 1)
       const ultimoDia = new Date(anio, mesIdx + 1, 0)
 
-      // Ítem vigente en este mes: vigenciaDesde <= ultimoDia Y (vigenciaHasta nulo O >= primerDia)
       const itemsMes = items.filter(item => {
         const desde = item.vigenciaDesde ? new Date(item.vigenciaDesde) : new Date(anio, 0, 1)
         const hasta  = item.vigenciaHasta ? new Date(item.vigenciaHasta) : null
@@ -85,7 +83,10 @@ router.get('/cumplimiento', authMW, async (req, res) => {
       for (const item of itemsMes) {
         const frec = frecuenciaMensual(item.periodicidad, mesIdx, anio)
         if (frec === 0) continue
-        planificado += frec
+        // Cada item = un evento de verificación del equipo completo
+        // Si tiene unidades individuales, multiplica por cantidad de unidades
+        const cantUnidades = item.unidades?.length || 1
+        planificado += frec * cantUnidades
         if (item.codigoPrefix) {
           ejecutado += ejecutadoPorMesPrefix[mes]?.[item.codigoPrefix.toUpperCase()] || 0
         } else {
@@ -95,24 +96,11 @@ router.get('/cumplimiento', authMW, async (req, res) => {
       return { mes, planificado, ejecutado, porcentaje: planificado > 0 ? Math.round((ejecutado / planificado) * 100) : null }
     })
 
-    // Para la tabla del plan: mostrar solo ítems actualmente vigentes (sin vigenciaHasta o vigenciaHasta futura)
+    // Items vigentes para mostrar en la tabla
     const hoy = new Date()
-    const itemsVigentes = items.filter(item => !item.vigenciaHasta || new Date(item.vigenciaHasta) >= hoy)
-    const equiposMap = {}
-    for (const item of itemsVigentes) {
-      if (!equiposMap[item.equipo]) equiposMap[item.equipo] = []
-      equiposMap[item.equipo].push(item)
-    }
-    const porEquipo = Object.entries(equiposMap).map(([equipo, tareas]) => ({
-      equipo,
-      tareas: tareas.map(t => ({
-        _id: t._id, tarea: t.tarea, responsable: t.responsable,
-        proveedorExterno: t.proveedorExterno, periodicidad: t.periodicidad,
-        codigoPrefix: t.codigoPrefix, vigenciaDesde: t.vigenciaDesde
-      }))
-    }))
+    const itemsVigentes = items.filter(i => !i.vigenciaHasta || new Date(i.vigenciaHasta) >= hoy)
 
-    res.json({ resultado, porEquipo, mesActual: resultado[mesActual] })
+    res.json({ resultado, items: itemsVigentes, mesActual: resultado[mesActual] })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
@@ -120,26 +108,15 @@ router.get('/cumplimiento', authMW, async (req, res) => {
 router.post('/', authMW, async (req, res) => {
   if (req.usuario.rol !== 'admin') return res.status(403).json({ error: 'Solo administradores' })
   try {
+    if (!Array.isArray(req.body.tareas) || !req.body.tareas.length) {
+      return res.status(400).json({ error: 'Debe incluir al menos una tarea' })
+    }
     const item = await ItemPlan.create(req.body)
     res.status(201).json(item)
   } catch (e) { res.status(400).json({ error: e.message }) }
 })
 
-// ─── POST /plan/bulk ──────────────────────────────────────────────────────────
-// Carga múltiples items de una vez (para import)
-router.post('/bulk', authMW, async (req, res) => {
-  if (req.usuario.rol !== 'admin') return res.status(403).json({ error: 'Solo administradores' })
-  try {
-    const { items } = req.body
-    if (!Array.isArray(items) || !items.length) return res.status(400).json({ error: 'Array de items requerido' })
-    const creados = await ItemPlan.insertMany(items)
-    res.status(201).json({ creados: creados.length })
-  } catch (e) { res.status(400).json({ error: e.message }) }
-})
-
 // ─── PUT /plan/:id ────────────────────────────────────────────────────────────
-// Si viene { periodicidad, aplicarDesde }: versiona el cambio (cierra el ítem actual y crea uno nuevo)
-// Si no viene aplicarDesde: edición simple del ítem actual
 router.put('/:id', authMW, async (req, res) => {
   if (req.usuario.rol !== 'admin') return res.status(403).json({ error: 'Solo administradores' })
   try {
@@ -148,26 +125,19 @@ router.put('/:id', authMW, async (req, res) => {
     if (!itemActual) return res.status(404).json({ error: 'Item no encontrado' })
 
     if (periodicidad && aplicarDesde) {
-      // Versionado: cierra el item actual hasta el día anterior al aplicarDesde
-      const fechaDesde   = new Date(aplicarDesde + 'T00:00:00')
-      const fechaHasta   = new Date(fechaDesde)
-      fechaHasta.setDate(fechaHasta.getDate() - 1) // día anterior
+      // Versionar: cierra el actual y crea uno nuevo desde la fecha indicada
+      const fechaDesde = new Date(aplicarDesde + 'T00:00:00')
+      const fechaHasta = new Date(fechaDesde)
+      fechaHasta.setDate(fechaHasta.getDate() - 1)
 
       itemActual.vigenciaHasta = fechaHasta
       await itemActual.save()
 
-      // Crea nueva versión con nueva periodicidad, vigente desde la fecha elegida
       const { _id, createdAt, updatedAt, __v, ...datosBase } = itemActual.toObject()
-      const nuevoItem = await ItemPlan.create({
-        ...datosBase,
-        periodicidad,
-        vigenciaDesde: fechaDesde,
-        vigenciaHasta: null
-      })
+      const nuevoItem = await ItemPlan.create({ ...datosBase, periodicidad, vigenciaDesde: fechaDesde, vigenciaHasta: null })
       return res.status(201).json(nuevoItem)
     }
 
-    // Edición simple (sin versionado)
     const item = await ItemPlan.findByIdAndUpdate(req.params.id, { periodicidad, ...resto }, { new: true })
     res.json(item)
   } catch (e) { res.status(400).json({ error: e.message }) }

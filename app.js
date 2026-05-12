@@ -656,6 +656,10 @@ const PERIOD_LABEL = {
   diario:'Diario', semanal:'Semanal', quincenal:'Quincenal', mensual:'Mensual',
   trimestral:'Trimestral', semestral:'Semestral', anual:'Anual'
 }
+const PERIOD_COLOR = {
+  diario:'#6366F1', semanal:'#0EA5E9', quincenal:'#10B981', mensual:'#F59E0B',
+  trimestral:'#EF4444', semestral:'#8B5CF6', anual:'#64748B'
+}
 
 async function loadCumplimiento() {
   const contenedor = document.getElementById('tabla-plan-excel')
@@ -667,49 +671,76 @@ async function loadCumplimiento() {
     const params   = new URLSearchParams({ anio })
     if (estacion) params.append('estacion', estacion)
 
-    const { resultado, porEquipo, mesActual } = await apiFetch('/plan/cumplimiento?' + params)
+    const { resultado, items, mesActual } = await apiFetch('/plan/cumplimiento?' + params)
 
     if (mesActual?.porcentaje != null) updateGauge(mesActual.porcentaje)
 
-    if (!porEquipo?.length) {
+    if (!items?.length) {
       contenedor.innerHTML = `<div class="empty-state-card">
         <span style="font-size:2rem">📋</span>
-        <p>No hay tareas en el plan para ${anio}${estacion ? ' · ' + estacion : ''}.</p>
-        ${usuarioActual?.rol === 'admin' ? '<p style="color:var(--primary-color);font-size:13px;margin-top:4px">Usá "+ Agregar Tarea" para cargar el plan.</p>' : ''}
+        <p>No hay equipos en el plan para ${anio}${estacion ? ' · ' + estacion : ''}.</p>
+        ${usuarioActual?.rol === 'admin' ? '<p style="color:var(--primary-color);font-size:13px;margin-top:4px">Usá "+ Agregar Equipo" para cargar el plan.</p>' : ''}
       </div>`
       document.getElementById('panel-cumplimiento-mensual').style.display = 'none'
       return
     }
 
-    // Tabla estilo Excel
-    const periodos = ['diario','semanal','quincenal','mensual','trimestral','semestral','anual']
-    let html = `<div style="overflow-x:auto"><table class="tabla-excel-plan">
-      <thead><tr>
-        <th class="col-equipo">Equipo / Máquina</th>
-        <th class="col-tarea">Tarea / Ítem a verificar</th>
-        <th class="col-resp">Resp.</th>
-        ${periodos.map(p => `<th class="col-period">${PERIOD_LABEL[p]}</th>`).join('')}
-        ${usuarioActual?.rol === 'admin' ? '<th class="col-acc"></th>' : ''}
-      </tr></thead><tbody>`
+    // Tarjetas por grupo de equipo
+    let html = '<div class="plan-cards-grid">'
+    for (const item of items) {
+      const resp = item.responsable === 'PEX' && item.proveedorExterno
+        ? item.proveedorExterno
+        : (RESP_LABEL[item.responsable] || item.responsable)
+      const pColor = PERIOD_COLOR[item.periodicidad] || '#64748B'
+      const tareas = item.tareas || []
+      const unidades = item.unidades || []
 
-    for (const grupo of porEquipo) {
-      grupo.tareas.forEach((t, idx) => {
-        const respLabel = t.responsable === 'PEX' && t.proveedorExterno
-          ? t.proveedorExterno.slice(0, 12)
-          : (RESP_LABEL[t.responsable] || t.responsable)
-        html += `<tr>
-          ${idx === 0 ? `<td class="col-equipo equipo-cell" rowspan="${grupo.tareas.length}"><strong>${grupo.equipo}</strong></td>` : ''}
-          <td class="col-tarea">${t.tarea}${t.tarea?.includes(',') ? ' <span title="Parece que cargaste varias tareas juntas. Eliminá este ítem y usá \'Carga múltiple\' (una tarea por línea)." style="color:var(--warning-color);cursor:help;font-size:13px">⚠</span>' : ''}</td>
-          <td class="col-resp"><span class="resp-badge resp-${(t.responsable||'').toLowerCase()}" title="${respLabel}">${t.responsable}</span></td>
-          ${periodos.map(p => `<td class="col-period">${t.periodicidad === p ? '<span class="period-check">✓</span>' : ''}</td>`).join('')}
-          ${usuarioActual?.rol === 'admin' ? `<td class="col-acc" style="white-space:nowrap">
-            <button class="btn-icon-sm" style="color:var(--primary-color)" onclick="abrirModalEditarPeriod('${t._id}','${(t.tarea||'').replace(/'/g,"\\'")}','${t.periodicidad}')" title="Cambiar periodicidad">✏</button>
-            <button class="btn-icon-sm" onclick="eliminarItemPlan('${t._id}')" title="Eliminar">✕</button>
-          </td>` : ''}
-        </tr>`
-      })
+      // Tabla de matriz si hay unidades
+      let matrizHTML = ''
+      if (unidades.length && tareas.length) {
+        matrizHTML = `<div style="overflow-x:auto;margin-top:10px">
+          <table class="tabla-matriz-plan">
+            <thead><tr>
+              <th class="col-unidad">Unidad</th>
+              ${tareas.map(t => `<th class="col-tarea-mat">${t}</th>`).join('')}
+            </tr></thead>
+            <tbody>${unidades.map(u => `
+              <tr>
+                <td class="col-unidad"><strong>${u}</strong></td>
+                ${tareas.map(() => `<td class="col-tarea-mat" style="text-align:center;color:var(--text-secondary);font-size:12px">—</td>`).join('')}
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>`
+      } else if (tareas.length) {
+        matrizHTML = `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">
+          ${tareas.map(t => `<span class="tarea-chip">${t}</span>`).join('')}
+        </div>`
+      }
+
+      html += `<div class="plan-card">
+        <div class="plan-card-header">
+          <div>
+            <span class="plan-equipo-nombre">${item.equipo}</span>
+            ${item.codigoPrefix ? `<span class="plan-codigo-badge">${item.codigoPrefix}</span>` : ''}
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="period-badge" style="background:${pColor}15;color:${pColor};border:1px solid ${pColor}40">${PERIOD_LABEL[item.periodicidad]||item.periodicidad}</span>
+            ${usuarioActual?.rol === 'admin' ? `
+              <button class="btn-icon-sm" style="color:var(--primary-color)" onclick="abrirModalEditarPeriod('${item._id}','${escHtml(item.equipo)}','${item.periodicidad}')" title="Cambiar periodicidad">✏</button>
+              <button class="btn-icon-sm" style="color:var(--danger-color)" onclick="eliminarItemPlan('${item._id}')" title="Eliminar equipo">✕</button>
+            ` : ''}
+          </div>
+        </div>
+        <div class="plan-card-meta">
+          <span title="Responsable">👤 ${resp}</span>
+          ${unidades.length ? `<span title="Unidades individuales">🔢 ${unidades.length} unidad${unidades.length > 1 ? 'es' : ''}</span>` : ''}
+          <span title="Ítems a verificar">✅ ${tareas.length} ítem${tareas.length !== 1 ? 's' : ''}</span>
+        </div>
+        ${matrizHTML}
+      </div>`
     }
-    html += '</tbody></table></div>'
+    html += '</div>'
     contenedor.innerHTML = html
 
     // Cumplimiento mensual
@@ -747,12 +778,13 @@ document.getElementById('plan-estacion')?.addEventListener('change', loadCumplim
 const MESES_NOMBRES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
 
 function abrirModalItemPlan() {
-  switchPlanTab('individual')
   document.getElementById('ip-periodicidad').value = 'mensual'
   document.getElementById('grupo-pex-plan').style.display = 'none'
-  document.getElementById('ip-tarea').value = ''
-  document.getElementById('ip-tareas-bulk').value = ''
-  document.getElementById('bulk-preview').style.display = 'none'
+  document.getElementById('ip-equipo').value    = ''
+  document.getElementById('ip-codigo').value    = ''
+  document.getElementById('ip-unidades').value  = ''
+  document.getElementById('ip-tareas').value    = ''
+  document.getElementById('tareas-preview').style.display = 'none'
   const est  = document.getElementById('plan-estacion')?.value
   const anio = document.getElementById('plan-anio')?.value
   if (est)  document.getElementById('ip-estacion').value = est
@@ -764,13 +796,6 @@ function cerrarModalItemPlan() {
   document.getElementById('modal-item-plan').style.display = 'none'
 }
 
-function switchPlanTab(tab) {
-  document.getElementById('panel-individual').style.display = tab === 'individual' ? 'block' : 'none'
-  document.getElementById('panel-multiple').style.display   = tab === 'multiple'   ? 'block' : 'none'
-  document.getElementById('tab-individual').classList.toggle('active', tab === 'individual')
-  document.getElementById('tab-multiple').classList.toggle('active', tab === 'multiple')
-}
-
 function toggleProveedorItemPlan(val) {
   const g = document.getElementById('grupo-pex-plan')
   const i = document.getElementById('ip-proveedor')
@@ -778,75 +803,48 @@ function toggleProveedorItemPlan(val) {
   if (i) i.required = val === 'PEX'
 }
 
-function buildItemPlanBase() {
-  const resp = document.getElementById('ip-responsable').value
-  return {
+document.getElementById('ip-tareas')?.addEventListener('input', function () {
+  const tareas = this.value.split('\n').map(t => t.trim()).filter(Boolean)
+  const prev   = document.getElementById('tareas-preview')
+  if (!tareas.length) { prev.style.display = 'none'; return }
+  prev.style.display = 'block'
+  prev.innerHTML = `<strong style="color:var(--primary-color)">${tareas.length} ítem${tareas.length > 1 ? 's' : ''}:</strong> ${tareas.map(t => `<span class="tarea-chip" style="font-size:12px">${t}</span>`).join('')}`
+})
+
+async function guardarItemPlan() {
+  const equipo   = document.getElementById('ip-equipo').value.trim()
+  const tareasRaw = document.getElementById('ip-tareas').value
+  const tareas   = tareasRaw.split('\n').map(t => t.trim()).filter(Boolean)
+  const unidades = document.getElementById('ip-unidades').value.split('\n').map(u => u.trim()).filter(Boolean)
+  const resp     = document.getElementById('ip-responsable').value
+
+  if (!equipo)         { showNotification('Ingresá el nombre del equipo.', 'error'); return }
+  if (!tareas.length)  { showNotification('Ingresá al menos un ítem a verificar.', 'error'); return }
+  if (resp === 'PEX' && !document.getElementById('ip-proveedor').value.trim()) {
+    showNotification('Ingresá el nombre del proveedor externo.', 'error'); return
+  }
+
+  const body = {
     estacion:         document.getElementById('ip-estacion').value,
     anio:             parseInt(document.getElementById('ip-anio').value, 10),
-    equipo:           document.getElementById('ip-equipo').value.trim(),
+    equipo,
     codigoPrefix:     document.getElementById('ip-codigo').value.trim().toUpperCase() || undefined,
+    tareas,
+    unidades,
     responsable:      resp,
     proveedorExterno: resp === 'PEX' ? document.getElementById('ip-proveedor').value.trim() : null,
     periodicidad:     document.getElementById('ip-periodicidad').value
   }
-}
 
-async function guardarItemPlanIndividual() {
-  const tarea = document.getElementById('ip-tarea').value.trim()
-  if (!tarea) { showNotification('Ingresá la tarea.', 'error'); return }
-  const base = buildItemPlanBase()
-  if (!base.equipo) { showNotification('Ingresá el equipo.', 'error'); return }
-  if (base.responsable === 'PEX' && !base.proveedorExterno) { showNotification('Ingresá el nombre del proveedor.', 'error'); return }
+  const btn = document.querySelector('#modal-item-plan .btn-primary')
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando...' }
   try {
-    await apiFetch('/plan', { method: 'POST', body: JSON.stringify({ ...base, tarea }) })
-    showNotification('Tarea agregada al plan.')
+    await apiFetch('/plan', { method: 'POST', body: JSON.stringify(body) })
+    showNotification('Equipo agregado al plan.')
     cerrarModalItemPlan()
     loadCumplimiento()
   } catch (err) { showNotification('Error: ' + err.message, 'error') }
-}
-
-async function guardarYAgregarOtro() {
-  const tarea = document.getElementById('ip-tarea').value.trim()
-  const base  = buildItemPlanBase()
-  if (!base.equipo || !tarea) { showNotification('Completá Equipo y Tarea.', 'error'); return }
-  if (base.responsable === 'PEX' && !base.proveedorExterno) { showNotification('Ingresá el nombre del proveedor.', 'error'); return }
-  const btn = document.getElementById('btn-guardar-otro')
-  btn.disabled = true; btn.textContent = 'Guardando...'
-  try {
-    await apiFetch('/plan', { method: 'POST', body: JSON.stringify({ ...base, tarea }) })
-    showNotification('Tarea guardada. Podés agregar otra.', 'success')
-    document.getElementById('ip-tarea').value = ''
-    document.getElementById('ip-tarea').focus()
-    loadCumplimiento()
-  } catch (err) { showNotification('Error: ' + err.message, 'error') }
-  finally { btn.disabled = false; btn.textContent = 'Guardar y agregar otro' }
-}
-
-document.getElementById('ip-tareas-bulk')?.addEventListener('input', function () {
-  const tareas = this.value.split('\n').map(t => t.trim()).filter(Boolean)
-  const prev   = document.getElementById('bulk-preview')
-  if (!tareas.length) { prev.style.display = 'none'; return }
-  prev.style.display = 'block'
-  prev.innerHTML = `<strong style="color:var(--primary-color)">${tareas.length} tarea${tareas.length > 1 ? 's' : ''} a crear:</strong> ${tareas.map(t => `<span style="display:inline-block;background:#fff;border-radius:6px;padding:2px 8px;margin:2px;font-size:12px">${t}</span>`).join('')}`
-})
-
-async function guardarMultiplesTareas() {
-  const raw    = document.getElementById('ip-tareas-bulk').value
-  const tareas = raw.split('\n').map(t => t.trim()).filter(Boolean)
-  if (!tareas.length) { showNotification('Ingresá al menos una tarea.', 'error'); return }
-  const base = buildItemPlanBase()
-  if (!base.equipo) { showNotification('Ingresá el equipo.', 'error'); return }
-  if (base.responsable === 'PEX' && !base.proveedorExterno) { showNotification('Ingresá el nombre del proveedor.', 'error'); return }
-  const btn = document.getElementById('btn-guardar-bulk')
-  btn.disabled = true; btn.textContent = 'Guardando...'
-  try {
-    const items = tareas.map(tarea => ({ ...base, tarea }))
-    await apiFetch('/plan/bulk', { method: 'POST', body: JSON.stringify({ items }) })
-    showNotification(`${tareas.length} tarea${tareas.length > 1 ? 's' : ''} agregadas al plan.`, 'success')
-    cerrarModalItemPlan()
-    loadCumplimiento()
-  } catch (err) { showNotification('Error: ' + err.message, 'error') }
-  finally { btn.disabled = false; btn.textContent = 'Guardar todas' }
+  finally { if (btn) { btn.disabled = false; btn.textContent = 'Guardar' } }
 }
 
 async function eliminarItemPlan(id) {

@@ -1060,3 +1060,96 @@ body {
 .pct-pill.amarillo { background: var(--warning-light); color: #92400E; }
 .pct-pill.rojo   { background: var(--danger-light); color: var(--danger-color); }
 .pct-pill.gris   { background: #F1F5F9; color: var(--text-secondary); }
+
+/* ─── Plan cards grid ───────────────────────────────────────── */
+.plan-cards-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+.plan-card {
+    background: var(--card-bg);
+    border: 1px solid #E0E5F2;
+    border-radius: 12px;
+    padding: 16px 20px;
+    box-shadow: 0 1px 4px rgba(67,24,255,0.04);
+}
+.plan-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+.plan-equipo-nombre {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+.plan-codigo-badge {
+    display: inline-block;
+    background: var(--primary-light);
+    color: var(--primary-color);
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 6px;
+    margin-left: 8px;
+    letter-spacing: 0.5px;
+}
+.period-badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 20px;
+    letter-spacing: 0.3px;
+}
+.plan-card-meta {
+    display: flex;
+    gap: 16px;
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    flex-wrap: wrap;
+}
+.tarea-chip {
+    display: inline-block;
+    background: #F1F5F9;
+    color: var(--text-primary);
+    border: 1px solid #E0E5F2;
+    border-radius: 6px;
+    padding: 3px 10px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+/* ─── Tabla matriz plan ─────────────────────────────────────── */
+.tabla-matriz-plan {
+    border-collapse: collapse;
+    font-size: 12px;
+    min-width: 400px;
+    width: 100%;
+}
+.tabla-matriz-plan th {
+    background: var(--primary-light);
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    padding: 6px 10px;
+    text-align: center;
+    border: 1px solid #E0E5F2;
+}
+.tabla-matriz-plan .col-unidad {
+    text-align: left;
+    white-space: nowrap;
+    background: #FAFBFF;
+}
+.tabla-matriz-plan td {
+    padding: 6px 10px;
+    border: 1px solid #E0E5F2;
+    color: var(--text-primary);
+}
+.col-tarea-mat { text-align: center; }
