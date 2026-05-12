@@ -141,14 +141,14 @@ router.post('/', authMW, upload.single('archivo'), async (req, res) => {
 // con los equipos/unidades confirmados como "correcto", para que cuente
 // en el indicador de cumplimiento del plan.
 router.post('/manual', authMW, async (req, res) => {
-  const { itemPlanId, fecha, unidades = [], tareasVerificadas = [], observaciones } = req.body
+  const { itemPlanId, fecha, unidades = [], tareasVerificadas = [], observaciones, desviosNuevos = [] } = req.body
   if (!itemPlanId) return res.status(400).json({ error: 'itemPlanId requerido' })
 
   try {
     const item = await ItemPlan.findById(itemPlanId).lean()
     if (!item) return res.status(404).json({ error: 'Item del plan no encontrado' })
 
-    // Si no especificaron unidades, usa todas las del plan (o el código genérico)
+    const codigosConFalla = new Set(desviosNuevos.map(d => d.codigoEquipo).filter(Boolean))
     const unidadesAVerificar = unidades.length
       ? unidades
       : (item.unidades?.length ? item.unidades : [item.codigoPrefix || item.equipo])
@@ -156,23 +156,44 @@ router.post('/manual', authMW, async (req, res) => {
     const equipos = unidadesAVerificar.map(u => ({
       codigo:      u,
       descripcion: item.equipo,
-      estado:      'correcto',
-      observacion: null
+      estado:      codigosConFalla.has(u) ? 'falla' : 'correcto',
+      observacion: codigosConFalla.has(u)
+        ? (desviosNuevos.find(d => d.codigoEquipo === u)?.observacionFalla || null)
+        : null
     }))
+
+    const tieneFallas = equipos.some(e => e.estado === 'falla')
 
     const insp = await Inspeccion.create({
       estacion:              item.estacion,
       fecha:                 fecha ? new Date(fecha) : new Date(),
       archivoNombre:         'Verificación manual',
       equipos,
-      tieneFallas:           false,
+      tieneFallas,
       tareasVerificadas:     tareasVerificadas.length ? tareasVerificadas : (item.tareas || []),
       observacionesGenerales: observaciones || null,
       tipoVerificacion:      'Personal AUBASA',
       usuarioId:             req.usuario._id
     })
 
-    res.status(201).json({ inspeccion: insp })
+    // Crear desvíos
+    const idsDesvios = []
+    for (const d of desviosNuevos) {
+      const dev = await Desvio.create({
+        codigoEquipo:           d.codigoEquipo,
+        descripcionEquipo:      d.descripcionEquipo,
+        observacionFalla:       d.observacionFalla,
+        descripcionDesvio:      d.descripcionDesvio,
+        accionImplementar:      d.accionImplementar,
+        fechaEstimadaEjecucion: new Date(d.fechaEstimadaEjecucion),
+        estado:                 'Pendiente',
+        idInspeccionOrigen:     insp._id
+      })
+      idsDesvios.push(dev._id)
+    }
+    if (idsDesvios.length) { insp.desviosGenerados = idsDesvios; await insp.save() }
+
+    res.status(201).json({ inspeccion: insp, desviosCreados: idsDesvios })
   } catch (e) {
     res.status(400).json({ error: e.message })
   }

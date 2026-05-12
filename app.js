@@ -282,9 +282,9 @@ function inicializarCharts() {
 async function loadBarPMP() {
   if (!barChart) return
   try {
-    const anio   = new Date().getFullYear()
-    const estacion = document.getElementById('plan-estacion')?.value || ''
-    const params = new URLSearchParams({ anio })
+    const anio     = new Date().getFullYear()
+    const estacion = document.getElementById('resumen-estacion')?.value || ''
+    const params   = new URLSearchParams({ anio })
     if (estacion) params.append('estacion', estacion)
     const { resultado } = await apiFetch('/plan/cumplimiento?' + params)
     if (!resultado) return
@@ -294,7 +294,7 @@ async function loadBarPMP() {
     barChart.update()
 
     const label = document.getElementById('bar-pmp-label')
-    if (label) label.textContent = `Año ${anio}${estacion ? ' · ' + estacion : ' · Todas las estaciones'}`
+    if (label) label.textContent = `${anio}${estacion ? ' · ' + estacion : ''}`
   } catch { /* silencioso si no hay plan */ }
 }
 
@@ -820,10 +820,11 @@ function abrirModalItemPlan() {
   document.getElementById('ip-periodicidad').value = 'mensual'
   document.getElementById('grupo-pex-plan').style.display = 'none'
   document.getElementById('grupo-mes-inicio').style.display = 'none'
-  document.getElementById('ip-equipo').value    = ''
-  document.getElementById('ip-codigo').value    = ''
-  document.getElementById('ip-unidades').value  = ''
-  document.getElementById('ip-tareas').value    = ''
+  document.getElementById('ip-equipo').value         = ''
+  document.getElementById('ip-codigo').value         = ''
+  document.getElementById('ip-unidades').value       = ''
+  document.getElementById('ip-tareas').value         = ''
+  document.getElementById('ip-vigencia-desde').value = ''
   document.getElementById('tareas-preview').style.display = 'none'
   const est  = document.getElementById('plan-estacion')?.value
   const anio = document.getElementById('plan-anio')?.value
@@ -877,7 +878,8 @@ async function guardarItemPlan() {
     periodicidad,
     mesInicio:        ['trimestral','semestral','anual'].includes(periodicidad)
                         ? parseInt(document.getElementById('ip-mes-inicio').value, 10)
-                        : 0
+                        : 0,
+    vigenciaDesde:    document.getElementById('ip-vigencia-desde').value || undefined
   }
 
   const btn = document.querySelector('#modal-item-plan .btn-primary')
@@ -942,12 +944,56 @@ async function abrirModalManual() {
   document.getElementById('manual-fecha').value = new Date().toISOString().split('T')[0]
   document.getElementById('manual-unidades-group').style.display = 'none'
   document.getElementById('manual-tareas-group').style.display   = 'none'
-  document.getElementById('manual-obs').value = ''
+  document.getElementById('manual-obs').value       = ''
+  document.getElementById('manual-desvios-lista').innerHTML = ''
+  desvioManualCount = 0
   document.getElementById('modal-manual-insp').style.display = 'flex'
 }
 
 function cerrarModalManual() {
   document.getElementById('modal-manual-insp').style.display = 'none'
+}
+
+let desvioManualCount = 0
+
+function agregarDesvioManual() {
+  const item = planItemsCacheManual.find(i => i._id === document.getElementById('manual-item-plan').value)
+  const unidades = item?.unidades || []
+  const idx = desvioManualCount++
+  const lista = document.getElementById('manual-desvios-lista')
+  const div = document.createElement('div')
+  div.id = `desvio-manual-${idx}`
+  div.style.cssText = 'background:#FFF7ED;border:1px solid #FED7AA;border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:8px'
+  div.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <span style="font-size:12px;font-weight:700;color:#C2410C">⚠ Desvío ${idx + 1}</span>
+      <button type="button" onclick="this.closest('[id]').remove()" style="background:none;border:none;cursor:pointer;color:#9CA3AF;font-size:16px">✕</button>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <div style="flex:1;min-width:140px">
+        <label style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase">Unidad / Equipo</label>
+        <select class="dv-codigo" style="width:100%;margin-top:4px;font-size:13px;padding:6px 10px;border-radius:8px;border:1px solid #FED7AA;background:#fff">
+          ${unidades.length
+            ? unidades.map(u => `<option value="${u}">${u}</option>`).join('')
+            : `<option value="${item?.codigoPrefix || ''}">General</option>`}
+        </select>
+      </div>
+      <div style="flex:2;min-width:200px">
+        <label style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase">Descripción del desvío *</label>
+        <input type="text" class="dv-desc" required placeholder="Qué falla se detectó..." style="width:100%;margin-top:4px;font-size:13px;padding:6px 10px;border-radius:8px;border:1px solid #FED7AA;background:#fff;box-sizing:border-box">
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <div style="flex:2;min-width:200px">
+        <label style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase">Acción a implementar *</label>
+        <input type="text" class="dv-accion" required placeholder="Acción correctiva..." style="width:100%;margin-top:4px;font-size:13px;padding:6px 10px;border-radius:8px;border:1px solid #FED7AA;background:#fff;box-sizing:border-box">
+      </div>
+      <div style="flex:1;min-width:130px">
+        <label style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase">Fecha estimada *</label>
+        <input type="date" class="dv-fecha" required style="width:100%;margin-top:4px;font-size:13px;padding:6px 10px;border-radius:8px;border:1px solid #FED7AA;background:#fff;box-sizing:border-box">
+      </div>
+    </div>`
+  lista.appendChild(div)
 }
 
 function onSelectManualItem(itemId) {
@@ -993,14 +1039,28 @@ async function guardarManual() {
   const tareasVerificadas = Array.from(document.querySelectorAll('.manual-tarea-check:checked')).map(c => c.value)
   const observaciones = document.getElementById('manual-obs').value.trim()
 
+  // Recolectar desvíos
+  const desviosNuevos = []
+  for (const div of document.querySelectorAll('#manual-desvios-lista > div')) {
+    const codigo = div.querySelector('.dv-codigo')?.value?.trim()
+    const desc   = div.querySelector('.dv-desc')?.value?.trim()
+    const accion = div.querySelector('.dv-accion')?.value?.trim()
+    const fecha2 = div.querySelector('.dv-fecha')?.value
+    if (!desc || !accion || !fecha2) { showNotification('Completá todos los campos de cada desvío.', 'error'); return }
+    desviosNuevos.push({ codigoEquipo: codigo || item?.codigoPrefix || '', descripcionEquipo: item?.equipo || '', observacionFalla: desc, descripcionDesvio: desc, accionImplementar: accion, fechaEstimadaEjecucion: fecha2 })
+  }
+
   const btn = document.querySelector('#modal-manual-insp .btn-primary')
   if (btn) { btn.disabled = true; btn.textContent = 'Guardando...' }
   try {
     await apiFetch('/inspecciones/manual', {
       method: 'POST',
-      body: JSON.stringify({ itemPlanId: itemId, fecha, unidades, tareasVerificadas, observaciones })
+      body: JSON.stringify({ itemPlanId: itemId, fecha, unidades, tareasVerificadas, observaciones, desviosNuevos })
     })
-    showNotification('Verificación manual registrada correctamente.')
+    const msgs = ['Verificación manual registrada.']
+    if (desviosNuevos.length) msgs.push(`${desviosNuevos.length} desvío(s) enviado(s) a gestión.`)
+    showNotification(msgs.join(' '), 'success')
+    desvioManualCount = 0
     cerrarModalManual()
     loadCumplimiento()
     loadKpis()
@@ -1018,9 +1078,10 @@ function abrirModalEditarPeriod(id, tareaLabel, periodActual) {
   const anio  = parseInt(document.getElementById('plan-anio')?.value || ahora.getFullYear(), 10)
   const sel   = document.getElementById('ep-desde')
   sel.innerHTML = ''
-  for (let m = ahora.getMonth(); m < 12; m++) {
-    const val = `${anio}-${String(m + 1).padStart(2, '0')}-01`
-    sel.innerHTML += `<option value="${val}">${MESES_NOMBRES[m]} ${anio}</option>`
+  for (let m = 0; m < 12; m++) {
+    const val     = `${anio}-${String(m + 1).padStart(2, '0')}-01`
+    const esPasado = m < ahora.getMonth() && anio <= ahora.getFullYear()
+    sel.innerHTML += `<option value="${val}"${m === ahora.getMonth() ? ' selected' : ''}>${MESES_NOMBRES[m]} ${anio}${esPasado ? ' (pasado)' : ''}</option>`
   }
 
   actualizarInfoEditarPeriod(periodActual, periodActual)
