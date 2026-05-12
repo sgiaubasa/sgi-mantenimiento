@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: sgi-mantenimiento
+    runtime: node
+    buildCommand: npm install --prefix backend
+    startCommand: node backend/server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGO_URI
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: JWT_SECRET
+        sync: false
