@@ -3,6 +3,7 @@ const multer     = require('multer')
 const authMW     = require('../middleware/auth')
 const Inspeccion = require('../models/Inspeccion')
 const Desvio     = require('../models/Desvio')
+const ItemPlan   = require('../models/ItemPlan')
 const { analyzeDocument } = require('../services/visionAnalysis')
 
 const TIPOS_PERMITIDOS = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/gif']
@@ -130,6 +131,48 @@ router.post('/', authMW, upload.single('archivo'), async (req, res) => {
       desviosCreados: idsDesviosCreados,
       desviosCerrados: idsCerrados
     })
+  } catch (e) {
+    res.status(400).json({ error: e.message })
+  }
+})
+
+// ─── POST /manual ────────────────────────────────────────────────────────────
+// Registra una verificación manual sin IA. Crea un registro de Inspeccion
+// con los equipos/unidades confirmados como "correcto", para que cuente
+// en el indicador de cumplimiento del plan.
+router.post('/manual', authMW, async (req, res) => {
+  const { itemPlanId, fecha, unidades = [], tareasVerificadas = [], observaciones } = req.body
+  if (!itemPlanId) return res.status(400).json({ error: 'itemPlanId requerido' })
+
+  try {
+    const item = await ItemPlan.findById(itemPlanId).lean()
+    if (!item) return res.status(404).json({ error: 'Item del plan no encontrado' })
+
+    // Si no especificaron unidades, usa todas las del plan (o el código genérico)
+    const unidadesAVerificar = unidades.length
+      ? unidades
+      : (item.unidades?.length ? item.unidades : [item.codigoPrefix || item.equipo])
+
+    const equipos = unidadesAVerificar.map(u => ({
+      codigo:      u,
+      descripcion: item.equipo,
+      estado:      'correcto',
+      observacion: null
+    }))
+
+    const insp = await Inspeccion.create({
+      estacion:              item.estacion,
+      fecha:                 fecha ? new Date(fecha) : new Date(),
+      archivoNombre:         'Verificación manual',
+      equipos,
+      tieneFallas:           false,
+      tareasVerificadas:     tareasVerificadas.length ? tareasVerificadas : (item.tareas || []),
+      observacionesGenerales: observaciones || null,
+      tipoVerificacion:      'Personal AUBASA',
+      usuarioId:             req.usuario._id
+    })
+
+    res.status(201).json({ inspeccion: insp })
   } catch (e) {
     res.status(400).json({ error: e.message })
   }

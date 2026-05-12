@@ -14,6 +14,7 @@ const itemPlanSchema = new Schema({
   responsable:       { type: String, enum: RESPONSABLES, required: true },
   proveedorExterno:  { type: String, default: null },
   periodicidad:      { type: String, enum: PERIODICIDADES, required: true },
+  mesInicio:         { type: Number, default: 0, min: 0, max: 11 },  // 0=Enero para trimestral/semestral/anual
   vigenciaDesde:     { type: Date, default: null },      // null = desde inicio del año
   vigenciaHasta:     { type: Date, default: null },      // null = aún vigente
   activo:            { type: Boolean, default: true }

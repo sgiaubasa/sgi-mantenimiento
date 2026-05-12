@@ -226,13 +226,20 @@
                 <!-- PASO 1: Carga del documento -->
                 <section class="form-section" id="panel-upload">
                     <div class="chart-card full-width">
-                        <h3 class="chart-title">Analizar Registro de Control (IA)</h3>
-                        <p class="section-desc">Cargá una foto o PDF del registro de campo (Anexo 3.6) y la IA extraerá los datos automáticamente.</p>
-                        <form id="analizar-form" class="custom-form">
+                        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:4px">
+                            <div>
+                                <h3 class="chart-title" style="margin-bottom:2px">Analizar Registro de Control (IA)</h3>
+                                <p class="section-desc" style="margin:0">Cargá una foto o PDF del registro de campo (Anexo 3.6) y la IA extraerá los datos automáticamente.</p>
+                            </div>
+                            <button type="button" class="btn-secondary btn-sm" onclick="abrirModalManual()" style="white-space:nowrap">
+                                ✏ Carga Manual
+                            </button>
+                        </div>
+                        <form id="analizar-form" class="custom-form" style="margin-top:16px">
                             <div class="form-row">
                                 <div class="form-group">
                                     <label for="estacion-manual">Estación (respaldo manual)</label>
-                                    <select id="estacion-manual">
+                                    <select id="estacion-manual" onchange="cargarSelectIAPlan()">
                                         <option value="">Se detecta del documento</option>
                                         <option value="Berazategui">Berazategui</option>
                                         <option value="Bernal">Bernal</option>
@@ -253,6 +260,15 @@
                                         </div>
                                     </div>
                                     <small class="helper-text">Máximo 10 MB · PDF, JPG, PNG, WebP</small>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Equipo del plan <small style="font-weight:400;color:var(--text-secondary)">(opcional — vincula con cumplimiento)</small></label>
+                                    <select id="ia-item-plan">
+                                        <option value="">Detectar automáticamente</option>
+                                    </select>
+                                    <small class="helper-text">Seleccioná el equipo que corresponde al documento para relacionarlo al plan.</small>
                                 </div>
                             </div>
                             <div class="form-row">
@@ -527,7 +543,7 @@
                         </div>
                         <div class="form-group">
                             <label>Periodicidad *</label>
-                            <select id="ip-periodicidad" required>
+                            <select id="ip-periodicidad" required onchange="onCambioPeriodicidadPlan(this.value)">
                                 <option value="diario">Diario</option>
                                 <option value="semanal">Semanal</option>
                                 <option value="quincenal">Quincenal</option>
@@ -536,6 +552,26 @@
                                 <option value="semestral">Semestral</option>
                                 <option value="anual">Anual</option>
                             </select>
+                        </div>
+                    </div>
+                    <div class="form-group" id="grupo-mes-inicio" style="display:none">
+                        <label>Mes de inicio *</label>
+                        <div style="display:flex;gap:12px;align-items:flex-start">
+                            <select id="ip-mes-inicio" style="max-width:200px">
+                                <option value="0">Enero</option>
+                                <option value="1">Febrero</option>
+                                <option value="2">Marzo</option>
+                                <option value="3">Abril</option>
+                                <option value="4">Mayo</option>
+                                <option value="5">Junio</option>
+                                <option value="6">Julio</option>
+                                <option value="7">Agosto</option>
+                                <option value="8">Septiembre</option>
+                                <option value="9">Octubre</option>
+                                <option value="10">Noviembre</option>
+                                <option value="11">Diciembre</option>
+                            </select>
+                            <small class="helper-text" style="margin-top:8px" id="mes-inicio-hint"></small>
                         </div>
                     </div>
                     <div class="form-group" id="grupo-pex-plan" style="display:none">
@@ -626,6 +662,53 @@
                         <button type="submit" class="btn-primary">Confirmar Cierre</button>
                     </div>
                 </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ MODAL: Verificación Manual ══════════════════════════════════════ -->
+    <div id="modal-manual-insp" class="modal-overlay" style="display:none">
+        <div class="modal-card" style="max-width:600px;width:95%;max-height:90vh;overflow-y:auto">
+            <div class="modal-header">
+                <div class="modal-icon" style="background:#DCFCE7">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="#16A34A" stroke-width="2" width="22" height="22">
+                        <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+                    </svg>
+                </div>
+                <div>
+                    <h2 style="font-size:17px">Registrar Verificación Manual</h2>
+                    <p style="font-size:13px;color:var(--text-secondary);margin-top:2px">Cuando la IA no está disponible, registrá la verificación a mano</p>
+                </div>
+            </div>
+            <div class="modal-body" style="display:flex;flex-direction:column;gap:16px">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Equipo del plan *</label>
+                        <select id="manual-item-plan" required onchange="onSelectManualItem(this.value)">
+                            <option value="">Seleccioná un equipo...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Fecha de verificación *</label>
+                        <input type="date" id="manual-fecha" required>
+                    </div>
+                </div>
+                <div id="manual-unidades-group" style="display:none">
+                    <label style="font-size:13px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:8px">Unidades verificadas <small style="font-weight:400">(desmarcá las que NO se verificaron)</small></label>
+                    <div id="manual-unidades-checks" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+                </div>
+                <div id="manual-tareas-group" style="display:none">
+                    <label style="font-size:13px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:8px">Ítems verificados <small style="font-weight:400">(desmarcá los que NO se verificaron)</small></label>
+                    <div id="manual-tareas-checks" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+                </div>
+                <div class="form-group">
+                    <label>Observaciones</label>
+                    <textarea id="manual-obs" rows="2" placeholder="Ej: Todo conforme. Sin novedades." style="resize:vertical"></textarea>
+                </div>
+                <div class="form-actions modal-actions" style="gap:10px;margin-top:4px">
+                    <button type="button" class="btn-secondary" onclick="cerrarModalManual()">Cancelar</button>
+                    <button type="button" class="btn-primary" onclick="guardarManual()">Guardar Verificación</button>
+                </div>
             </div>
         </div>
     </div>

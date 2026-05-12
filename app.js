@@ -777,9 +777,21 @@ document.getElementById('plan-estacion')?.addEventListener('change', loadCumplim
 // ─── Modal ítem del plan ──────────────────────────────────────────────────────
 const MESES_NOMBRES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
 
+function onCambioPeriodicidadPlan(val) {
+  const necesita = ['trimestral', 'semestral', 'anual'].includes(val)
+  document.getElementById('grupo-mes-inicio').style.display = necesita ? 'block' : 'none'
+  const hint = document.getElementById('mes-inicio-hint')
+  if (!hint) return
+  if (val === 'trimestral') hint.textContent = 'Los otros meses serán +3 y +6 meses después'
+  else if (val === 'semestral') hint.textContent = 'El segundo mes será 6 meses después'
+  else if (val === 'anual') hint.textContent = 'Solo se planifica ese mes cada año'
+  else hint.textContent = ''
+}
+
 function abrirModalItemPlan() {
   document.getElementById('ip-periodicidad').value = 'mensual'
   document.getElementById('grupo-pex-plan').style.display = 'none'
+  document.getElementById('grupo-mes-inicio').style.display = 'none'
   document.getElementById('ip-equipo').value    = ''
   document.getElementById('ip-codigo').value    = ''
   document.getElementById('ip-unidades').value  = ''
@@ -824,6 +836,7 @@ async function guardarItemPlan() {
     showNotification('Ingresá el nombre del proveedor externo.', 'error'); return
   }
 
+  const periodicidad = document.getElementById('ip-periodicidad').value
   const body = {
     estacion:         document.getElementById('ip-estacion').value,
     anio:             parseInt(document.getElementById('ip-anio').value, 10),
@@ -833,7 +846,10 @@ async function guardarItemPlan() {
     unidades,
     responsable:      resp,
     proveedorExterno: resp === 'PEX' ? document.getElementById('ip-proveedor').value.trim() : null,
-    periodicidad:     document.getElementById('ip-periodicidad').value
+    periodicidad,
+    mesInicio:        ['trimestral','semestral','anual'].includes(periodicidad)
+                        ? parseInt(document.getElementById('ip-mes-inicio').value, 10)
+                        : 0
   }
 
   const btn = document.querySelector('#modal-item-plan .btn-primary')
@@ -854,6 +870,114 @@ async function eliminarItemPlan(id) {
     showNotification('Tarea eliminada.')
     loadCumplimiento()
   } catch (err) { showNotification('Error: ' + err.message, 'error') }
+}
+
+// ─── Selector de equipo en formulario IA ─────────────────────────────────────
+async function cargarSelectIAPlan() {
+  const sel = document.getElementById('ia-item-plan')
+  if (!sel) return
+  const estacion = document.getElementById('estacion-manual')?.value || ''
+  const anio     = new Date().getFullYear()
+  const params   = new URLSearchParams({ anio })
+  if (estacion) params.append('estacion', estacion)
+  sel.innerHTML = '<option value="">Detectar automáticamente</option>'
+  try {
+    const items = await apiFetch('/plan?' + params)
+    for (const item of (items || [])) {
+      const opt = document.createElement('option')
+      opt.value = item._id
+      opt.textContent = `${item.equipo}${item.codigoPrefix ? ' (' + item.codigoPrefix + ')' : ''} — ${PERIOD_LABEL[item.periodicidad] || item.periodicidad}`
+      sel.appendChild(opt)
+    }
+  } catch { /* silencioso */ }
+}
+
+// ─── Modal: Verificación Manual ───────────────────────────────────────────────
+let planItemsCacheManual = []
+
+async function abrirModalManual() {
+  const anio     = document.getElementById('plan-anio')?.value || new Date().getFullYear()
+  const estacion = document.getElementById('plan-estacion')?.value || ''
+  const params   = new URLSearchParams({ anio })
+  if (estacion) params.append('estacion', estacion)
+  try { planItemsCacheManual = await apiFetch('/plan?' + params) } catch { planItemsCacheManual = [] }
+
+  const sel = document.getElementById('manual-item-plan')
+  sel.innerHTML = '<option value="">Seleccioná un equipo...</option>'
+  for (const item of planItemsCacheManual) {
+    const opt = document.createElement('option')
+    opt.value = item._id
+    opt.textContent = `${item.equipo}${item.codigoPrefix ? ' (' + item.codigoPrefix + ')' : ''} — ${PERIOD_LABEL[item.periodicidad] || item.periodicidad}`
+    sel.appendChild(opt)
+  }
+
+  document.getElementById('manual-fecha').value = new Date().toISOString().split('T')[0]
+  document.getElementById('manual-unidades-group').style.display = 'none'
+  document.getElementById('manual-tareas-group').style.display   = 'none'
+  document.getElementById('manual-obs').value = ''
+  document.getElementById('modal-manual-insp').style.display = 'flex'
+}
+
+function cerrarModalManual() {
+  document.getElementById('modal-manual-insp').style.display = 'none'
+}
+
+function onSelectManualItem(itemId) {
+  const item = planItemsCacheManual.find(i => i._id === itemId)
+  const unidadesGrp  = document.getElementById('manual-unidades-group')
+  const tareasGrp    = document.getElementById('manual-tareas-group')
+  const unidadesDiv  = document.getElementById('manual-unidades-checks')
+  const tareasDiv    = document.getElementById('manual-tareas-checks')
+
+  if (!item) { unidadesGrp.style.display = 'none'; tareasGrp.style.display = 'none'; return }
+
+  const checkStyle = 'display:flex;align-items:center;gap:6px;cursor:pointer;background:#F8FAFF;border:1px solid #E0E5F2;padding:5px 12px;border-radius:8px;font-size:13px'
+
+  if (item.unidades?.length) {
+    unidadesGrp.style.display = 'block'
+    unidadesDiv.innerHTML = item.unidades.map(u =>
+      `<label style="${checkStyle}"><input type="checkbox" class="manual-unidad-check" value="${u}" checked> ${u}</label>`
+    ).join('')
+  } else {
+    unidadesGrp.style.display = 'none'
+  }
+
+  if (item.tareas?.length) {
+    tareasGrp.style.display = 'block'
+    tareasDiv.innerHTML = item.tareas.map(t =>
+      `<label style="${checkStyle}"><input type="checkbox" class="manual-tarea-check" value="${t}" checked> ${t}</label>`
+    ).join('')
+  } else {
+    tareasGrp.style.display = 'none'
+  }
+}
+
+async function guardarManual() {
+  const itemId = document.getElementById('manual-item-plan').value
+  const fecha  = document.getElementById('manual-fecha').value
+  if (!itemId) { showNotification('Seleccioná un equipo del plan.', 'error'); return }
+  if (!fecha)  { showNotification('Ingresá la fecha.', 'error'); return }
+
+  const item = planItemsCacheManual.find(i => i._id === itemId)
+  const unidades = item?.unidades?.length
+    ? Array.from(document.querySelectorAll('.manual-unidad-check:checked')).map(c => c.value)
+    : []
+  const tareasVerificadas = Array.from(document.querySelectorAll('.manual-tarea-check:checked')).map(c => c.value)
+  const observaciones = document.getElementById('manual-obs').value.trim()
+
+  const btn = document.querySelector('#modal-manual-insp .btn-primary')
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando...' }
+  try {
+    await apiFetch('/inspecciones/manual', {
+      method: 'POST',
+      body: JSON.stringify({ itemPlanId: itemId, fecha, unidades, tareasVerificadas, observaciones })
+    })
+    showNotification('Verificación manual registrada correctamente.')
+    cerrarModalManual()
+    loadCumplimiento()
+    loadKpis()
+  } catch (err) { showNotification('Error: ' + err.message, 'error') }
+  finally { if (btn) { btn.disabled = false; btn.textContent = 'Guardar Verificación' } }
 }
 
 // ─── Modal: Cambiar periodicidad (versionado) ─────────────────────────────────

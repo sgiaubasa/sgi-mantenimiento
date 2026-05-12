@@ -5,16 +5,16 @@ const Inspeccion = require('../models/Inspeccion')
 
 const MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre']
 
-function frecuenciaMensual(periodicidad, mes, anio) {
+function frecuenciaMensual(periodicidad, mes, anio, mesInicio = 0) {
   const diasMes = new Date(anio, mes + 1, 0).getDate()
   switch (periodicidad) {
     case 'diario':       return diasMes
     case 'semanal':      return 4
     case 'quincenal':    return 2
     case 'mensual':      return 1
-    case 'trimestral':   return mes % 3 === 0 ? 1 : 0
-    case 'semestral':    return mes % 6 === 0 ? 1 : 0
-    case 'anual':        return mes === 0 ? 1 : 0
+    case 'trimestral':   return (mes - mesInicio + 12) % 3 === 0 ? 1 : 0
+    case 'semestral':    return (mes - mesInicio + 12) % 6 === 0 ? 1 : 0
+    case 'anual':        return mes === mesInicio ? 1 : 0
     default:             return 0
   }
 }
@@ -81,7 +81,7 @@ router.get('/cumplimiento', authMW, async (req, res) => {
 
       let planificado = 0, ejecutado = 0
       for (const item of itemsMes) {
-        const frec = frecuenciaMensual(item.periodicidad, mesIdx, anio)
+        const frec = frecuenciaMensual(item.periodicidad, mesIdx, anio, item.mesInicio || 0)
         if (frec === 0) continue
         // Cada item = un evento de verificación del equipo completo
         // Si tiene unidades individuales, multiplica por cantidad de unidades
