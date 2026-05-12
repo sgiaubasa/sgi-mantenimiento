@@ -37,20 +37,24 @@ Reglas estrictas:
 - Si el documento no es un registro de mantenimiento reconocible, devolvé "equipos": []
 - No inventes datos que no estén en el documento`
 
-/**
- * Analiza un PDF o imagen con Google Gemini (gratuito).
- * @param {Buffer} fileBuffer
- * @param {string} mimeType
- */
 async function analyzeDocument(fileBuffer, mimeType) {
-  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' }, { apiVersion: 'v1' })
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
 
   const base64Data = fileBuffer.toString('base64')
 
-  const result = await model.generateContent([
-    { inlineData: { mimeType, data: base64Data } },
-    PROMPT
-  ])
+  let result
+  try {
+    result = await model.generateContent([
+      { inlineData: { mimeType, data: base64Data } },
+      PROMPT
+    ])
+  } catch (err) {
+    const msg = err.message || ''
+    if (msg.includes('429') || msg.toLowerCase().includes('quota')) {
+      throw new Error('Cuota de IA excedida. Esperá unos segundos y volvé a intentarlo.')
+    }
+    throw err
+  }
 
   const rawText = result.response.text().trim()
   const jsonText = rawText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
