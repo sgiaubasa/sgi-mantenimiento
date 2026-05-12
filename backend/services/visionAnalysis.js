@@ -37,34 +37,44 @@ Reglas estrictas:
 - Si el documento no es un registro de mantenimiento reconocible, devolvé "equipos": []
 - No inventes datos que no estén en el documento`
 
+const sleep = ms => new Promise(r => setTimeout(r, ms))
+
 async function analyzeDocument(fileBuffer, mimeType) {
   const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
-
   const base64Data = fileBuffer.toString('base64')
+  const payload = [{ inlineData: { mimeType, data: base64Data } }, PROMPT]
 
-  let result
-  try {
-    result = await model.generateContent([
-      { inlineData: { mimeType, data: base64Data } },
-      PROMPT
-    ])
-  } catch (err) {
-    const msg = err.message || ''
-    if (msg.includes('429') || msg.toLowerCase().includes('quota')) {
-      throw new Error('Cuota de IA excedida. Esperá unos segundos y volvé a intentarlo.')
+  const MAX_INTENTOS = 4
+  const DELAYS_MS = [3000, 8000, 20000] // esperas entre reintentos (3s, 8s, 20s)
+
+  for (let intento = 0; intento < MAX_INTENTOS; intento++) {
+    try {
+      const result = await model.generateContent(payload)
+      const rawText = result.response.text().trim()
+      const jsonText = rawText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
+      try {
+        const parsed = JSON.parse(jsonText)
+        if (!Array.isArray(parsed.equipos)) parsed.equipos = []
+        return parsed
+      } catch {
+        throw new Error('La IA no devolvió un JSON válido. Respuesta: ' + rawText.substring(0, 300))
+      }
+    } catch (err) {
+      const msg = err.message || ''
+      const esQuota = msg.includes('429') || msg.toLowerCase().includes('quota') || msg.toLowerCase().includes('rate')
+
+      if (esQuota && intento < MAX_INTENTOS - 1) {
+        const espera = DELAYS_MS[intento]
+        console.log(`[Gemini] Cuota excedida (intento ${intento + 1}/${MAX_INTENTOS}), esperando ${espera / 1000}s...`)
+        await sleep(espera)
+        continue
+      }
+
+      if (esQuota) {
+        throw new Error('El servicio de IA está saturado. Intentá de nuevo en 1-2 minutos.')
+      }
+      throw err
     }
-    throw err
-  }
-
-  const rawText = result.response.text().trim()
-  const jsonText = rawText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
-
-  try {
-    const parsed = JSON.parse(jsonText)
-    if (!Array.isArray(parsed.equipos)) parsed.equipos = []
-    return parsed
-  } catch {
-    throw new Error('La IA no devolvió un JSON válido. Respuesta: ' + rawText.substring(0, 300))
   }
 }
 
