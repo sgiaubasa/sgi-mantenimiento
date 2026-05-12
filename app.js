@@ -226,6 +226,7 @@ function colorearTrend(kpiId, valor, umbral) {
 
 // ─── Charts ───────────────────────────────────────────────────────────────────
 let gaugeChart
+let barChart
 
 function inicializarCharts() {
   if (gaugeChart) return
@@ -250,24 +251,51 @@ function inicializarCharts() {
 
   const barCtx = document.getElementById('barChart')?.getContext('2d')
   if (!barCtx) return
-  const gradient = barCtx.createLinearGradient(0, 0, 0, 400)
-  gradient.addColorStop(0, '#4318FF')
-  gradient.addColorStop(1, 'rgba(67,24,255,0.2)')
-  new Chart(barCtx, {
+
+  barChart = new Chart(barCtx, {
     type: 'bar',
     data: {
-      labels: ['Octubre', 'Noviembre', 'Diciembre', 'Enero', 'Febrero', 'Marzo'],
+      labels: MESES_LABEL,
       datasets: [
-        { label: 'Hudson',   data: [45,52,38,41,30,25], backgroundColor: gradient, borderRadius: 8, barPercentage: 0.6, categoryPercentage: 0.8 },
-        { label: 'Dock Sud', data: [35,40,42,35,28,20], backgroundColor: '#00E396', borderRadius: 8, barPercentage: 0.6, categoryPercentage: 0.8 }
+        { label: 'Planificado', data: Array(12).fill(0), backgroundColor: 'rgba(67,24,255,0.18)', borderColor: '#4318FF', borderWidth: 2, borderRadius: 6, barPercentage: 0.55, categoryPercentage: 0.8 },
+        { label: 'Ejecutado',   data: Array(12).fill(0), backgroundColor: '#4318FF', borderRadius: 6, barPercentage: 0.55, categoryPercentage: 0.8 }
       ]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { position: 'top', align: 'end' }, tooltip: { backgroundColor: '#1B2559', cornerRadius: 8 } },
-      scales: { y: { beginAtZero: true, border: { display: false } }, x: { border: { display: false }, grid: { display: false } } }
+      plugins: {
+        legend: { position: 'top', align: 'end' },
+        tooltip: { backgroundColor: '#1B2559', cornerRadius: 8, callbacks: {
+          label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y}`
+        }}
+      },
+      scales: {
+        y: { beginAtZero: true, border: { display: false }, ticks: { precision: 0 } },
+        x: { border: { display: false }, grid: { display: false } }
+      }
     }
   })
+
+  loadBarPMP()
+}
+
+async function loadBarPMP() {
+  if (!barChart) return
+  try {
+    const anio   = new Date().getFullYear()
+    const estacion = document.getElementById('plan-estacion')?.value || ''
+    const params = new URLSearchParams({ anio })
+    if (estacion) params.append('estacion', estacion)
+    const { resultado } = await apiFetch('/plan/cumplimiento?' + params)
+    if (!resultado) return
+
+    barChart.data.datasets[0].data = resultado.map(r => r.planificado || 0)
+    barChart.data.datasets[1].data = resultado.map(r => r.ejecutado  || 0)
+    barChart.update()
+
+    const label = document.getElementById('bar-pmp-label')
+    if (label) label.textContent = `Año ${anio}${estacion ? ' · ' + estacion : ' · Todas las estaciones'}`
+  } catch { /* silencioso si no hay plan */ }
 }
 
 function updateGauge(pct) {
