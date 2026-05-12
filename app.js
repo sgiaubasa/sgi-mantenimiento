@@ -697,7 +697,27 @@ async function loadCumplimiento() {
       return
     }
 
+    // Obtener detalle por categoría para mostrar responsables
+    const params2 = new URLSearchParams({ anio })
+    if (estacion) params2.append('estacion', estacion)
+    const categorias = await apiFetch('/plan?' + params2)
+
     const mesActualNombre = MESES_ES[new Date().getMonth()]
+    const mesActualIdx    = new Date().getMonth()
+
+    // Tabla de categorías con responsable
+    const tablaCategorias = categorias.length ? `
+      <h4 style="font-size:13px;font-weight:600;color:var(--text-secondary);margin:20px 0 8px;text-transform:uppercase;letter-spacing:0.5px">Detalle por categoría</h4>
+      <table class="tabla-plan">
+        <thead><tr><th>Categoría</th><th>Responsable</th><th style="text-align:center">${MESES_LABEL[mesActualIdx]} Plan</th><th style="text-align:center">${MESES_LABEL[mesActualIdx]} Ejec.</th></tr></thead>
+        <tbody>${categorias.map(c => {
+          const resp = c.responsable === 'Proveedor Externo' && c.proveedorExterno
+            ? `Proveedor: ${c.proveedorExterno}`
+            : c.responsable
+          const planMes = c.planificado?.[mesActualNombre] || 0
+          return `<tr><td>${c.categoria}</td><td><span class="resp-badge resp-${c.responsable.toLowerCase().replace(/ /g,'-')}">${resp}</span></td><td style="text-align:center">${planMes || '—'}</td><td style="text-align:center">—</td></tr>`
+        }).join('')}</tbody>
+      </table>` : ''
 
     contenedor.innerHTML = `
       <table class="tabla-plan">
@@ -722,7 +742,8 @@ async function loadCumplimiento() {
             </tr>`
           }).join('')}
         </tbody>
-      </table>`
+      </table>
+      ${tablaCategorias}`
   } catch (err) {
     contenedor.innerHTML = `<p class="empty-state" style="color:var(--danger-color)">Error: ${err.message}</p>`
   }
@@ -742,16 +763,30 @@ function cerrarModalPlan() {
   document.getElementById('modal-plan').style.display = 'none'
 }
 
+function toggleProveedorPlan(val) {
+  const g = document.getElementById('grupo-proveedor-plan')
+  const i = document.getElementById('plan-proveedor')
+  if (g) g.style.display = val === 'Proveedor Externo' ? 'block' : 'none'
+  if (i) i.required = val === 'Proveedor Externo'
+}
+
 document.getElementById('form-plan')?.addEventListener('submit', async e => {
   e.preventDefault()
+  const responsable = document.getElementById('plan-responsable').value
+  const proveedor   = document.getElementById('plan-proveedor').value.trim()
+  if (responsable === 'Proveedor Externo' && !proveedor) {
+    showNotification('Ingresá el nombre del proveedor.', 'error'); return
+  }
   const planificado = {}
   MESES_ES.forEach(mes => {
     planificado[mes] = parseInt(document.getElementById('p-' + mes)?.value || '0', 10)
   })
   const body = {
-    estacion:  document.getElementById('plan-est').value,
-    anio:      parseInt(document.getElementById('plan-anio-modal').value, 10),
-    categoria: document.getElementById('plan-categoria').value.trim(),
+    estacion:         document.getElementById('plan-est').value,
+    anio:             parseInt(document.getElementById('plan-anio-modal').value, 10),
+    categoria:        document.getElementById('plan-categoria').value.trim(),
+    responsable,
+    proveedorExterno: responsable === 'Proveedor Externo' ? proveedor : null,
     planificado
   }
   try {

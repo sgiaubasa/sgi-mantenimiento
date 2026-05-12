@@ -474,6 +474,23 @@
                             </datalist>
                         </div>
                     </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Responsable *</label>
+                            <select id="plan-responsable" required onchange="toggleProveedorPlan(this.value)">
+                                <option value="Mantenimiento">Mantenimiento</option>
+                                <option value="Sistemas">Sistemas</option>
+                                <option value="Maestranza">Maestranza</option>
+                                <option value="Tareas Generales">Tareas Generales</option>
+                                <option value="Supervisor">Supervisor</option>
+                                <option value="Proveedor Externo">Proveedor Externo</option>
+                            </select>
+                        </div>
+                        <div class="form-group" id="grupo-proveedor-plan" style="display:none">
+                            <label>Nombre del proveedor *</label>
+                            <input type="text" id="plan-proveedor" placeholder="Ej: Servicios Eléctricos SA">
+                        </div>
+                    </div>
                     <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px">Cantidad de inspecciones planificadas por mes:</p>
                     <div class="form-row" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
                         <div class="form-group"><label style="font-size:12px">Enero</label><input type="number" id="p-enero" min="0" value="0" class="plan-mes-input"></div>

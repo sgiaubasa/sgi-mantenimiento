@@ -857,3 +857,20 @@ body {
     cursor: pointer;
 }
 .check-item input { cursor: pointer; accent-color: var(--primary-color); }
+
+/* ─── Badges de Responsable ──────────────────────────────────── */
+.resp-badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 20px;
+    background: #F1F5F9;
+    color: #475569;
+}
+.resp-badge.resp-mantenimiento     { background: #DBEAFE; color: #1D4ED8; }
+.resp-badge.resp-sistemas          { background: #EDE9FE; color: #5B21B6; }
+.resp-badge.resp-maestranza        { background: #D1FAE5; color: #065F46; }
+.resp-badge.resp-tareas-generales  { background: #FEF3C7; color: #92400E; }
+.resp-badge.resp-supervisor        { background: #FCE7F3; color: #9D174D; }
+.resp-badge.resp-proveedor-externo { background: #FEE2E2; color: #991B1B; }

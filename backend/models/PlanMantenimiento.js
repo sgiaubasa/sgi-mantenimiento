@@ -16,11 +16,15 @@ const mesesSchema = new Schema({
   diciembre: { type: Number, default: 0 }
 }, { _id: false })
 
+const RESPONSABLES = ['Mantenimiento', 'Sistemas', 'Maestranza', 'Tareas Generales', 'Supervisor', 'Proveedor Externo']
+
 const planSchema = new Schema({
-  estacion:  { type: String, required: true },
-  anio:      { type: Number, required: true },
-  categoria: { type: String, required: true }, // ej: 'Cabinas de Cobro', 'Generadores'
-  planificado: mesesSchema
+  estacion:        { type: String, required: true },
+  anio:            { type: Number, required: true },
+  categoria:       { type: String, required: true },
+  responsable:     { type: String, enum: RESPONSABLES, required: true },
+  proveedorExterno:{ type: String, default: null }, // solo si responsable = 'Proveedor Externo'
+  planificado:     mesesSchema
 }, { timestamps: true })
 
 planSchema.index({ estacion: 1, anio: 1, categoria: 1 }, { unique: true })
