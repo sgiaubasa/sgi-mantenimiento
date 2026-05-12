@@ -732,6 +732,26 @@ async function loadCumplimiento() {
       const tareas = item.tareas || []
       const unidades = item.unidades || []
 
+      // Ítem sin tareas = dato viejo de prueba → mostrar advertencia y no sumar al plan
+      if (!tareas.length) {
+        html += `<div class="plan-card" style="border:2px dashed #F79009;background:#FFFBEB">
+          <div class="plan-card-header">
+            <div>
+              <span class="plan-equipo-nombre" style="color:#92400E">${item.equipo || 'Ítem sin nombre'}</span>
+              <span style="font-size:11px;color:#F79009;font-weight:600;margin-left:8px">⚠ Sin ítems configurados</span>
+            </div>
+            <div style="display:flex;gap:8px">
+              ${usuarioActual?.rol === 'admin' ? `
+                <button class="btn-icon-sm" style="color:var(--primary-color)" onclick="abrirModalEditarPeriod('${item._id}')" title="Configurar ítems">✏</button>
+                <button class="btn-icon-sm" style="color:var(--danger-color)" onclick="eliminarItemPlan('${item._id}')" title="Eliminar">✕</button>
+              ` : ''}
+            </div>
+          </div>
+          <p style="font-size:12px;color:#92400E;margin:6px 0 0;line-height:1.4">Este ítem no tiene tareas configuradas y <strong>no afecta el cálculo de cumplimiento</strong>. Editalo para agregar tareas o eliminalo.</p>
+        </div>`
+        continue
+      }
+
       // Tabla de matriz si hay unidades
       let matrizHTML = ''
       if (unidades.length && tareas.length) {
@@ -787,11 +807,11 @@ async function loadCumplimiento() {
       panelMensual.style.display = 'block'
       const mesActualNombre = MESES_ES[new Date().getMonth()]
       tablaCump.innerHTML = `<table class="tabla-plan">
-        <thead><tr><th>Mes</th><th style="text-align:center">Planificado</th><th style="text-align:center">Ejecutado</th><th style="text-align:center">%</th></tr></thead>
+        <thead><tr><th>Mes</th><th style="text-align:center">Ítems planificados</th><th style="text-align:center">Ítems ejecutados</th><th style="text-align:center">%</th></tr></thead>
         <tbody>${resultado.map((r, i) => {
           const esMes = r.mes === mesActualNombre
           const pct   = r.planificado > 0 ? r.porcentaje : null
-          const color = pct == null ? '' : pct >= 90 ? 'var(--success-color)' : pct >= 70 ? '#F79009' : 'var(--danger-color)'
+          const color = pct == null ? '' : pct >= 85 ? 'var(--success-color)' : pct >= 60 ? '#F79009' : 'var(--danger-color)'
           return `<tr class="${esMes ? 'row-mes-actual' : ''}">
             <td style="font-weight:${esMes?'600':'400'};text-transform:capitalize">${MESES_LABEL[i]}${esMes?' ◀':''}</td>
             <td style="text-align:center">${r.planificado||'—'}</td>

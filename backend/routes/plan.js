@@ -44,49 +44,59 @@ router.get('/cumplimiento', authMW, async (req, res) => {
 
     if (!items.length) return res.json({ resultado: [], items: [] })
 
-    // Inspecciones del año: contar por mes y por codigoPrefix
+    // Inspecciones del año: sumar ÍTEMS verificados (equipos × tareas) por prefijo por mes
     const desde = new Date(anio, 0, 1)
     const hasta  = new Date(anio + 1, 0, 1)
     const filtroInsp = { createdAt: { $gte: desde, $lt: hasta } }
     if (estacion) filtroInsp.estacion = estacion
-    const inspecciones = await Inspeccion.find(filtroInsp).select('createdAt equipos').lean()
+    const inspecciones = await Inspeccion.find(filtroInsp)
+      .select('createdAt equipos tareasVerificadas fecha')
+      .lean()
 
+    // ejecutadoPorMesPrefix[mes][prefix] = suma de ítems verificados (unidades × tareas)
     const ejecutadoPorMesPrefix = {}
     const ejecutadoPorMes = {}
     for (const insp of inspecciones) {
-      const mes = MESES[new Date(insp.createdAt).getMonth()]
-      ejecutadoPorMes[mes] = (ejecutadoPorMes[mes] || 0) + 1
+      const fechaRef = insp.fecha || insp.createdAt
+      const mes = MESES[new Date(fechaRef).getMonth()]
+      const tareasCount = Math.max((insp.tareasVerificadas || []).length, 1)
+
       if (!ejecutadoPorMesPrefix[mes]) ejecutadoPorMesPrefix[mes] = {}
-      const prefijosInsp = new Set()
+
+      // Agrupar equipos por prefijo y contar unidades
+      const unidadesPorPrefix = {}
       for (const eq of (insp.equipos || [])) {
         const prefix = (eq.codigo || '').replace(/[-\s\d].*/, '').toUpperCase()
-        if (prefix) prefijosInsp.add(prefix)
+        if (prefix) unidadesPorPrefix[prefix] = (unidadesPorPrefix[prefix] || 0) + 1
       }
-      for (const p of prefijosInsp) {
-        ejecutadoPorMesPrefix[mes][p] = (ejecutadoPorMesPrefix[mes][p] || 0) + 1
+
+      for (const [prefix, unidades] of Object.entries(unidadesPorPrefix)) {
+        ejecutadoPorMesPrefix[mes][prefix] = (ejecutadoPorMesPrefix[mes][prefix] || 0) + (unidades * tareasCount)
       }
+      // Fallback para ítems sin codigoPrefix: suma tareasCount por inspección
+      ejecutadoPorMes[mes] = (ejecutadoPorMes[mes] || 0) + tareasCount
     }
 
-    // Planificado = una verificación del equipo completo (no por tarea individual)
-    // Si el item tiene unidades, planificado = frecuencia × cantidad de unidades
+    // planificado = frecuencia × cantUnidades × cantTareas
+    // Solo se cuentan ítems que tienen tareas configuradas (ítems sin tareas = datos de prueba)
     const resultado = MESES.map((mes, mesIdx) => {
       const primerDia = new Date(anio, mesIdx, 1)
       const ultimoDia = new Date(anio, mesIdx + 1, 0)
 
       const itemsMes = items.filter(item => {
-        const desde = item.vigenciaDesde ? new Date(item.vigenciaDesde) : new Date(anio, 0, 1)
-        const hasta  = item.vigenciaHasta ? new Date(item.vigenciaHasta) : null
-        return desde <= ultimoDia && (hasta === null || hasta >= primerDia)
+        if (!(item.tareas?.length)) return false   // ignora ítems sin tareas (datos anteriores)
+        const vigDesde = item.vigenciaDesde ? new Date(item.vigenciaDesde) : new Date(anio, 0, 1)
+        const vigHasta = item.vigenciaHasta ? new Date(item.vigenciaHasta) : null
+        return vigDesde <= ultimoDia && (vigHasta === null || vigHasta >= primerDia)
       })
 
       let planificado = 0, ejecutado = 0
       for (const item of itemsMes) {
         const frec = frecuenciaMensual(item.periodicidad, mesIdx, anio, item.mesInicio || 0)
         if (frec === 0) continue
-        // Cada item = un evento de verificación del equipo completo
-        // Si tiene unidades individuales, multiplica por cantidad de unidades
         const cantUnidades = item.unidades?.length || 1
-        planificado += frec * cantUnidades
+        const cantTareas   = item.tareas.length
+        planificado += frec * cantUnidades * cantTareas
         if (item.codigoPrefix) {
           ejecutado += ejecutadoPorMesPrefix[mes]?.[item.codigoPrefix.toUpperCase()] || 0
         } else {
