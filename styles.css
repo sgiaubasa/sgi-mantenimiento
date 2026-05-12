@@ -874,3 +874,168 @@ body {
 .resp-badge.resp-tareas-generales  { background: #FEF3C7; color: #92400E; }
 .resp-badge.resp-supervisor        { background: #FCE7F3; color: #9D174D; }
 .resp-badge.resp-proveedor-externo { background: #FEE2E2; color: #991B1B; }
+
+/* ─── Tabla Excel Plan de Mantenimiento ─────────────────────── */
+.plan-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+.plan-toolbar h3 { font-size: 17px; font-weight: 700; }
+.plan-filters {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+.plan-filters select, .plan-filters input[type="number"] {
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid #E0E5F2;
+    background: var(--bg-color);
+    font-size: 13px;
+    color: var(--text-primary);
+}
+
+.tabla-excel-plan {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    table-layout: fixed;
+}
+.tabla-excel-plan thead th {
+    background: var(--primary-color);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 10px 8px;
+    text-align: center;
+    border: 1px solid rgba(255,255,255,0.15);
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+.tabla-excel-plan thead th.col-equipo { text-align: left; width: 160px; }
+.tabla-excel-plan thead th.col-tarea  { text-align: left; width: 180px; }
+.tabla-excel-plan thead th.col-resp   { text-align: left; width: 110px; }
+.tabla-excel-plan thead th.col-period { width: 70px; }
+
+.tabla-excel-plan tbody tr:nth-child(even) { background: #F8F9FF; }
+.tabla-excel-plan tbody tr:hover { background: #EEF2FF; }
+.tabla-excel-plan tbody tr.equipo-group-header td {
+    background: #EDE9FE;
+    font-weight: 700;
+    font-size: 12px;
+    color: #5B21B6;
+    padding: 8px 12px;
+    border-top: 2px solid #C4B5FD;
+}
+
+.tabla-excel-plan td {
+    padding: 8px 10px;
+    border: 1px solid #E0E5F2;
+    color: var(--text-primary);
+    vertical-align: middle;
+}
+.tabla-excel-plan td.col-period {
+    text-align: center;
+    font-size: 16px;
+    color: var(--success-color);
+}
+.tabla-excel-plan td.col-equipo { font-weight: 600; }
+
+.equipo-cell {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.equipo-prefix-badge {
+    font-size: 10px;
+    font-weight: 700;
+    background: var(--primary-color);
+    color: #fff;
+    padding: 2px 6px;
+    border-radius: 5px;
+    letter-spacing: 0.5px;
+    flex-shrink: 0;
+}
+
+.period-check { font-size: 18px; line-height: 1; }
+
+.btn-icon-sm {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--danger-color);
+    padding: 4px;
+    border-radius: 6px;
+    font-size: 14px;
+    transition: background 0.2s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.btn-icon-sm:hover { background: var(--danger-light); }
+
+/* ─── Panel cumplimiento mensual ────────────────────────────── */
+.cumplimiento-panel {
+    background: var(--card-bg);
+    border-radius: var(--border-radius);
+    padding: 24px;
+    box-shadow: var(--shadow);
+    margin-top: 24px;
+}
+.cumplimiento-mes-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--primary-light);
+    color: var(--primary-color);
+    font-size: 13px;
+    font-weight: 600;
+    padding: 6px 14px;
+    border-radius: 20px;
+    margin-bottom: 16px;
+}
+.cumplimiento-chart-wrap {
+    overflow-x: auto;
+}
+.tabla-cumplimiento {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    min-width: 600px;
+}
+.tabla-cumplimiento th {
+    background: var(--primary-light);
+    color: var(--text-secondary);
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 8px 10px;
+    text-align: center;
+}
+.tabla-cumplimiento td {
+    padding: 8px 10px;
+    border-bottom: 1px solid #E0E5F2;
+    text-align: center;
+    color: var(--text-primary);
+}
+.tabla-cumplimiento tr.mes-actual td { background: rgba(67,24,255,0.05); font-weight: 600; }
+.pct-pill {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 20px;
+    font-weight: 700;
+    font-size: 12px;
+}
+.pct-pill.verde  { background: var(--success-light); color: var(--success-color); }
+.pct-pill.amarillo { background: var(--warning-light); color: #92400E; }
+.pct-pill.rojo   { background: var(--danger-light); color: var(--danger-color); }
+.pct-pill.gris   { background: #F1F5F9; color: var(--text-secondary); }

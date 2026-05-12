@@ -23,7 +23,6 @@ function getHeaders() {
 
 async function apiFetch(path, options = {}) {
   const res = await fetch(API_URL + path, {
-    headers: getHeaders(),
     ...options,
     headers: { ...getHeaders(), ...(options.headers || {}) }
   })
@@ -106,21 +105,17 @@ document.getElementById('btn-logout')?.addEventListener('click', e => { e.preven
 function iniciarDashboard() {
   mostrarDashboard()
 
-  // Mostrar datos del usuario en el header
-  const nombre  = usuarioActual.nombre || '?'
+  const nombre    = usuarioActual.nombre || '?'
   const iniciales = nombre.split(' ').map(p => p[0]).join('').toUpperCase().slice(0, 2)
   document.getElementById('user-nombre').textContent = nombre
   document.getElementById('user-rol').textContent    = { admin: 'Administrador', supervisor: 'Supervisor', operador: 'Operador' }[usuarioActual.rol] || usuarioActual.rol
   document.getElementById('user-avatar').textContent = iniciales
 
-  // Mostrar nav de Usuarios solo para admin
   if (usuarioActual.rol === 'admin') {
     document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'flex')
   }
 
-  // Filtrar estaciones según permisos del operador
   aplicarFiltroEstaciones()
-
   loadKpis()
   inicializarCharts()
 }
@@ -128,14 +123,10 @@ function iniciarDashboard() {
 function aplicarFiltroEstaciones() {
   if (!usuarioActual) return
   const estaciones = usuarioActual.estaciones || []
-  if (estaciones.length === 0) return  // Admin/supervisor: todas
-
-  const selects = document.querySelectorAll('#estacion-manual')
-  selects.forEach(sel => {
+  if (estaciones.length === 0) return
+  document.querySelectorAll('#estacion-manual').forEach(sel => {
     Array.from(sel.options).forEach(opt => {
-      if (opt.value && !estaciones.includes(opt.value)) {
-        opt.remove()
-      }
+      if (opt.value && !estaciones.includes(opt.value)) opt.remove()
     })
   })
 }
@@ -191,40 +182,32 @@ async function loadKpis() {
     const d = await apiFetch('/inspecciones/kpis')
     if (!d) return
 
-    setText('kpi-resumen-total',   d.totalMes)
-    setText('kpi-total',           d.totalMes)
-    setText('kpi-pendientes',      d.pendientes)
-    setText('kpi-cerrados',        d.cerradosMes)
-    setText('kpi-desvios-abiertos',    d.pendientes)
+    setText('kpi-resumen-total',        d.totalMes)
+    setText('kpi-total',                d.totalMes)
+    setText('kpi-pendientes',           d.pendientes)
+    setText('kpi-cerrados',             d.cerradosMes)
+    setText('kpi-desvios-abiertos',     d.pendientes)
     setText('kpi-desvios-cerrados-mes', d.cerradosMes)
 
-    // Disponibilidad de Recursos
     if (d.disponibilidad !== null && d.itemsTotal > 0) {
-      setText('kpi-disponibilidad', d.disponibilidad)
+      setText('kpi-disponibilidad',     d.disponibilidad)
       setText('kpi-disponibilidad-sub', `${d.itemsConformes} conformes de ${d.itemsTotal} verificados`)
       colorearTrend('kpi-disponibilidad', d.disponibilidad, 90)
     }
 
-    // Eficacia en Desvíos
     if (d.eficaciaDesvios !== null && d.desviosDetectadosMes > 0) {
-      setText('kpi-eficacia', d.eficaciaDesvios)
+      setText('kpi-eficacia',     d.eficaciaDesvios)
       setText('kpi-eficacia-sub', `${d.cerradosMes} cerrados de ${d.desviosDetectadosMes} detectados`)
       colorearTrend('kpi-eficacia', d.eficaciaDesvios, 80)
     }
 
-    // Sub de inspecciones
     const sub = document.getElementById('kpi-resumen-total-sub')
     if (sub) sub.textContent = d.conFallasMes > 0 ? `${d.conFallasMes} con fallas detectadas` : 'Sin fallas este mes ✓'
 
-    // Gauge
     updateGauge(d.disponibilidad)
 
-    // Badge nav
     const badge = document.getElementById('badge-pendientes')
-    if (badge) {
-      badge.textContent    = d.pendientes
-      badge.style.display  = d.pendientes > 0 ? 'inline-flex' : 'none'
-    }
+    if (badge) { badge.textContent = d.pendientes; badge.style.display = d.pendientes > 0 ? 'inline-flex' : 'none' }
   } catch (_) {}
 }
 
@@ -245,7 +228,7 @@ function colorearTrend(kpiId, valor, umbral) {
 let gaugeChart
 
 function inicializarCharts() {
-  if (gaugeChart) return  // ya inicializado
+  if (gaugeChart) return
   Chart.defaults.font.family = "'Inter', sans-serif"
   Chart.defaults.color = '#A3AED0'
 
@@ -341,7 +324,7 @@ function setBtnLoading(loading) {
   const text = document.getElementById('btn-analizar-text')
   const icon = document.getElementById('btn-analizar-icon')
   if (!btn) return
-  btn.disabled    = loading
+  btn.disabled     = loading
   text.textContent = loading ? 'Analizando...' : 'Analizar con IA'
   icon.innerHTML   = loading
     ? '<div class="spinner"></div>'
@@ -462,7 +445,7 @@ function toggleAutoclose(id, checked) {
 
 // ─── PASO 3: Guardar inspección ───────────────────────────────────────────────
 document.getElementById('btn-confirmar-guardar')?.addEventListener('click', async () => {
-  const fallas       = (analisisActual?.equipos || []).filter(e => e.estado === 'falla')
+  const fallas        = (analisisActual?.equipos || []).filter(e => e.estado === 'falla')
   const desviosNuevos = fallas.map((eq, i) => ({
     codigoEquipo:           eq.codigo,
     descripcionEquipo:      eq.descripcion || '',
@@ -472,8 +455,8 @@ document.getElementById('btn-confirmar-guardar')?.addEventListener('click', asyn
     fechaEstimadaEjecucion: document.getElementById(`desvio-fecha-${i}`).value
   }))
 
-  const tipoVerif  = document.getElementById('tipo-verificacion')?.value || 'Personal AUBASA'
-  const nomProv    = document.getElementById('nombre-proveedor')?.value  || ''
+  const tipoVerif = document.getElementById('tipo-verificacion')?.value || 'Personal AUBASA'
+  const nomProv   = document.getElementById('nombre-proveedor')?.value  || ''
 
   const fd = new FormData()
   fd.append('archivo', currentFile)
@@ -602,9 +585,7 @@ async function loadUsuarios() {
             <td><span class="rol-badge rol-${u.rol}">${roles[u.rol] || u.rol}</span></td>
             <td>${u.estaciones?.length ? u.estaciones.join(', ') : 'Todas'}</td>
             <td><span class="${u.activo ? 'badge-activo' : 'badge-inactivo'}">${u.activo ? 'Activo' : 'Inactivo'}</span></td>
-            <td>
-              <button class="btn-secondary btn-sm" onclick="editarUsuario('${u._id}','${escHtml(u.nombre)}','${u.email}','${u.rol}',${JSON.stringify(u.estaciones||[])},${u.activo})">Editar</button>
-            </td>
+            <td><button class="btn-secondary btn-sm" onclick="editarUsuario('${u._id}','${escHtml(u.nombre)}','${u.email}','${u.rol}',${JSON.stringify(u.estaciones||[])},${u.activo})">Editar</button></td>
           </tr>`).join('')}
         </tbody>
       </table>`
@@ -665,11 +646,19 @@ document.getElementById('form-usuario')?.addEventListener('submit', async e => {
 })
 
 // ─── Plan de Mantenimiento ────────────────────────────────────────────────────
-const MESES_ES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre']
+const MESES_ES    = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre']
 const MESES_LABEL = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
+const RESP_LABEL  = {
+  SUP:'Supervisor', MAA:'Mtto. AA', MAE:'Personal', MAN:'Personal Aubasa',
+  MVI:'Personal', MED:'Personal', ELE:'Electricista', JES:'Jefe Estación', PEX:'Prov. Externo'
+}
+const PERIOD_LABEL = {
+  diario:'Diario', semanal:'Semanal', quincenal:'Quincenal', mensual:'Mensual',
+  trimestral:'Trimestral', semestral:'Semestral', anual:'Anual'
+}
 
 async function loadCumplimiento() {
-  const contenedor = document.getElementById('tabla-cumplimiento')
+  const contenedor = document.getElementById('tabla-plan-excel')
   if (!contenedor) return
   contenedor.innerHTML = '<p class="empty-state">Cargando...</p>'
   try {
@@ -677,127 +666,136 @@ async function loadCumplimiento() {
     const estacion = document.getElementById('plan-estacion')?.value || ''
     const params   = new URLSearchParams({ anio })
     if (estacion) params.append('estacion', estacion)
-    const { resultado, mesActual } = await apiFetch('/plan/cumplimiento?' + params)
 
-    // Actualizar gauge con el mes actual
-    if (mesActual?.porcentaje !== null && mesActual?.porcentaje !== undefined) {
-      updateGauge(mesActual.porcentaje)
-      const el = document.getElementById('gauge-pct')
-      if (el) el.textContent = mesActual.porcentaje + '%'
-    }
+    const { resultado, porEquipo, mesActual } = await apiFetch('/plan/cumplimiento?' + params)
 
-    if (!resultado?.length) {
-      contenedor.innerHTML = '<p class="empty-state">No hay plan configurado. Un administrador debe cargar las metas mensuales.</p>'
+    if (mesActual?.porcentaje != null) updateGauge(mesActual.porcentaje)
+
+    if (!porEquipo?.length) {
+      contenedor.innerHTML = `<div class="empty-state-card">
+        <span style="font-size:2rem">📋</span>
+        <p>No hay tareas en el plan para ${anio}${estacion ? ' · ' + estacion : ''}.</p>
+        ${usuarioActual?.rol === 'admin' ? '<p style="color:var(--primary-color);font-size:13px;margin-top:4px">Usá "+ Agregar Tarea" para cargar el plan.</p>' : ''}
+      </div>`
+      document.getElementById('panel-cumplimiento-mensual').style.display = 'none'
       return
     }
 
-    const hayPlan = resultado.some(r => r.planificado > 0)
-    if (!hayPlan) {
-      contenedor.innerHTML = `<p class="empty-state">No hay plan configurado para ${anio}${estacion ? ' — ' + estacion : ''}. <br>Un administrador puede agregar metas haciendo clic en "Configurar Plan".</p>`
-      return
+    // Tabla estilo Excel
+    const periodos = ['diario','semanal','quincenal','mensual','trimestral','semestral','anual']
+    let html = `<div style="overflow-x:auto"><table class="tabla-excel-plan">
+      <thead><tr>
+        <th class="col-equipo">Equipo / Máquina</th>
+        <th class="col-tarea">Tarea / Ítem a verificar</th>
+        <th class="col-resp">Resp.</th>
+        ${periodos.map(p => `<th class="col-period">${PERIOD_LABEL[p]}</th>`).join('')}
+        ${usuarioActual?.rol === 'admin' ? '<th class="col-acc"></th>' : ''}
+      </tr></thead><tbody>`
+
+    for (const grupo of porEquipo) {
+      grupo.tareas.forEach((t, idx) => {
+        const respLabel = t.responsable === 'PEX' && t.proveedorExterno
+          ? t.proveedorExterno.slice(0, 12)
+          : (RESP_LABEL[t.responsable] || t.responsable)
+        html += `<tr>
+          ${idx === 0 ? `<td class="col-equipo equipo-cell" rowspan="${grupo.tareas.length}"><strong>${grupo.equipo}</strong></td>` : ''}
+          <td class="col-tarea">${t.tarea}</td>
+          <td class="col-resp"><span class="resp-badge resp-${(t.responsable||'').toLowerCase()}" title="${respLabel}">${t.responsable}</span></td>
+          ${periodos.map(p => `<td class="col-period">${t.periodicidad === p ? '<span class="period-check">✓</span>' : ''}</td>`).join('')}
+          ${usuarioActual?.rol === 'admin' ? `<td class="col-acc"><button class="btn-icon-sm" onclick="eliminarItemPlan('${t._id}')" title="Eliminar">✕</button></td>` : ''}
+        </tr>`
+      })
     }
+    html += '</tbody></table></div>'
+    contenedor.innerHTML = html
 
-    // Obtener detalle por categoría para mostrar responsables
-    const params2 = new URLSearchParams({ anio })
-    if (estacion) params2.append('estacion', estacion)
-    const categorias = await apiFetch('/plan?' + params2)
-
-    const mesActualNombre = MESES_ES[new Date().getMonth()]
-    const mesActualIdx    = new Date().getMonth()
-
-    // Tabla de categorías con responsable
-    const tablaCategorias = categorias.length ? `
-      <h4 style="font-size:13px;font-weight:600;color:var(--text-secondary);margin:20px 0 8px;text-transform:uppercase;letter-spacing:0.5px">Detalle por categoría</h4>
-      <table class="tabla-plan">
-        <thead><tr><th>Categoría</th><th>Responsable</th><th style="text-align:center">${MESES_LABEL[mesActualIdx]} Plan</th><th style="text-align:center">${MESES_LABEL[mesActualIdx]} Ejec.</th></tr></thead>
-        <tbody>${categorias.map(c => {
-          const resp = c.responsable === 'Proveedor Externo' && c.proveedorExterno
-            ? `Proveedor: ${c.proveedorExterno}`
-            : c.responsable
-          const planMes = c.planificado?.[mesActualNombre] || 0
-          return `<tr><td>${c.categoria}</td><td><span class="resp-badge resp-${c.responsable.toLowerCase().replace(/ /g,'-')}">${resp}</span></td><td style="text-align:center">${planMes || '—'}</td><td style="text-align:center">—</td></tr>`
+    // Cumplimiento mensual
+    const panelMensual = document.getElementById('panel-cumplimiento-mensual')
+    const tablaCump    = document.getElementById('tabla-cumplimiento')
+    if (resultado?.some(r => r.planificado > 0)) {
+      panelMensual.style.display = 'block'
+      const mesActualNombre = MESES_ES[new Date().getMonth()]
+      tablaCump.innerHTML = `<table class="tabla-plan">
+        <thead><tr><th>Mes</th><th style="text-align:center">Planificado</th><th style="text-align:center">Ejecutado</th><th style="text-align:center">%</th></tr></thead>
+        <tbody>${resultado.map((r, i) => {
+          const esMes = r.mes === mesActualNombre
+          const pct   = r.planificado > 0 ? r.porcentaje : null
+          const color = pct == null ? '' : pct >= 90 ? 'var(--success-color)' : pct >= 70 ? '#F79009' : 'var(--danger-color)'
+          return `<tr class="${esMes ? 'row-mes-actual' : ''}">
+            <td style="font-weight:${esMes?'600':'400'};text-transform:capitalize">${MESES_LABEL[i]}${esMes?' ◀':''}</td>
+            <td style="text-align:center">${r.planificado||'—'}</td>
+            <td style="text-align:center">${r.ejecutado||0}</td>
+            <td style="text-align:center;font-weight:600;color:${color}">${pct!=null?pct+'%':'—'}</td>
+          </tr>`
         }).join('')}</tbody>
-      </table>` : ''
-
-    contenedor.innerHTML = `
-      <table class="tabla-plan">
-        <thead>
-          <tr>
-            <th>Mes</th>
-            <th style="text-align:center">Planificado</th>
-            <th style="text-align:center">Ejecutado</th>
-            <th style="text-align:center">Cumplimiento</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${resultado.map((r, i) => {
-            const esMesActual = r.mes === mesActualNombre
-            const pct = r.planificado > 0 ? r.porcentaje : null
-            const color = pct === null ? '' : pct >= 90 ? 'var(--success-color)' : pct >= 70 ? '#F79009' : 'var(--danger-color)'
-            return `<tr class="${esMesActual ? 'row-mes-actual' : ''}">
-              <td style="font-weight:${esMesActual ? '600' : '400'};text-transform:capitalize">${MESES_LABEL[i]}${esMesActual ? ' ◀' : ''}</td>
-              <td style="text-align:center">${r.planificado || '—'}</td>
-              <td style="text-align:center">${r.ejecutado || 0}</td>
-              <td style="text-align:center;font-weight:600;color:${color}">${pct !== null ? pct + '%' : '—'}</td>
-            </tr>`
-          }).join('')}
-        </tbody>
-      </table>
-      ${tablaCategorias}`
+      </table>`
+    } else {
+      panelMensual.style.display = 'none'
+    }
   } catch (err) {
     contenedor.innerHTML = `<p class="empty-state" style="color:var(--danger-color)">Error: ${err.message}</p>`
   }
 }
 
-// Filtros del plan
 document.getElementById('plan-anio')?.addEventListener('change', loadCumplimiento)
 document.getElementById('plan-estacion')?.addEventListener('change', loadCumplimiento)
 
-// ─── Modal Plan ───────────────────────────────────────────────────────────────
-function abrirModalPlan() {
-  document.getElementById('form-plan')?.reset()
-  document.querySelectorAll('.plan-mes-input').forEach(el => el.value = 0)
-  document.getElementById('modal-plan').style.display = 'flex'
+// ─── Modal ítem del plan ──────────────────────────────────────────────────────
+function abrirModalItemPlan() {
+  document.getElementById('item-plan-id').value = ''
+  document.getElementById('modal-item-plan-titulo').textContent = 'Agregar Tarea al Plan'
+  document.getElementById('form-item-plan')?.reset()
+  document.getElementById('ip-periodicidad').value = 'mensual'
+  document.getElementById('grupo-pex-plan').style.display = 'none'
+  const est  = document.getElementById('plan-estacion')?.value
+  const anio = document.getElementById('plan-anio')?.value
+  if (est)  document.getElementById('ip-estacion').value = est
+  if (anio) document.getElementById('ip-anio').value     = anio
+  document.getElementById('modal-item-plan').style.display = 'flex'
 }
-function cerrarModalPlan() {
-  document.getElementById('modal-plan').style.display = 'none'
+function cerrarModalItemPlan() {
+  document.getElementById('modal-item-plan').style.display = 'none'
+}
+function toggleProveedorItemPlan(val) {
+  const g = document.getElementById('grupo-pex-plan')
+  const i = document.getElementById('ip-proveedor')
+  if (g) g.style.display = val === 'PEX' ? 'block' : 'none'
+  if (i) i.required = val === 'PEX'
 }
 
-function toggleProveedorPlan(val) {
-  const g = document.getElementById('grupo-proveedor-plan')
-  const i = document.getElementById('plan-proveedor')
-  if (g) g.style.display = val === 'Proveedor Externo' ? 'block' : 'none'
-  if (i) i.required = val === 'Proveedor Externo'
-}
-
-document.getElementById('form-plan')?.addEventListener('submit', async e => {
+document.getElementById('form-item-plan')?.addEventListener('submit', async e => {
   e.preventDefault()
-  const responsable = document.getElementById('plan-responsable').value
-  const proveedor   = document.getElementById('plan-proveedor').value.trim()
-  if (responsable === 'Proveedor Externo' && !proveedor) {
-    showNotification('Ingresá el nombre del proveedor.', 'error'); return
-  }
-  const planificado = {}
-  MESES_ES.forEach(mes => {
-    planificado[mes] = parseInt(document.getElementById('p-' + mes)?.value || '0', 10)
-  })
+  const resp = document.getElementById('ip-responsable').value
+  const prov = document.getElementById('ip-proveedor').value.trim()
+  if (resp === 'PEX' && !prov) { showNotification('Ingresá el nombre del proveedor.', 'error'); return }
+
   const body = {
-    estacion:         document.getElementById('plan-est').value,
-    anio:             parseInt(document.getElementById('plan-anio-modal').value, 10),
-    categoria:        document.getElementById('plan-categoria').value.trim(),
-    responsable,
-    proveedorExterno: responsable === 'Proveedor Externo' ? proveedor : null,
-    planificado
+    estacion:         document.getElementById('ip-estacion').value,
+    anio:             parseInt(document.getElementById('ip-anio').value, 10),
+    equipo:           document.getElementById('ip-equipo').value.trim(),
+    codigoPrefix:     document.getElementById('ip-codigo').value.trim().toUpperCase() || undefined,
+    tarea:            document.getElementById('ip-tarea').value.trim(),
+    responsable:      resp,
+    proveedorExterno: resp === 'PEX' ? prov : null,
+    periodicidad:     document.getElementById('ip-periodicidad').value
   }
+
   try {
     await apiFetch('/plan', { method: 'POST', body: JSON.stringify(body) })
-    showNotification('Plan guardado correctamente.')
-    cerrarModalPlan()
+    showNotification('Tarea agregada al plan.')
+    cerrarModalItemPlan()
     loadCumplimiento()
-  } catch (err) {
-    showNotification('Error: ' + err.message, 'error')
-  }
+  } catch (err) { showNotification('Error: ' + err.message, 'error') }
 })
+
+async function eliminarItemPlan(id) {
+  if (!confirm('¿Eliminar esta tarea del plan?')) return
+  try {
+    await apiFetch(`/plan/${id}`, { method: 'DELETE' })
+    showNotification('Tarea eliminada.')
+    loadCumplimiento()
+  } catch (err) { showNotification('Error: ' + err.message, 'error') }
+}
 
 // ─── Utilidades ───────────────────────────────────────────────────────────────
 function formatDate(dateStr) {
@@ -812,10 +810,8 @@ function escHtml(str) { return (str || '').replace(/'/g, "\\'").replace(/"/g, '&
   const token   = localStorage.getItem('sgi_token')
   const usuario = localStorage.getItem('sgi_usuario')
   if (token && usuario) {
-    try {
-      usuarioActual = JSON.parse(usuario)
-      iniciarDashboard()
-    } catch { mostrarLogin() }
+    try { usuarioActual = JSON.parse(usuario); iniciarDashboard() }
+    catch { mostrarLogin() }
   } else {
     mostrarLogin()
   }
