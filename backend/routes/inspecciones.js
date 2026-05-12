@@ -254,6 +254,18 @@ router.get('/kpis', authMW, async (req, res) => {
   }
 })
 
+// ─── DELETE /:id ─────────────────────────────────────────────────────────────
+router.delete('/:id', authMW, async (req, res) => {
+  if (req.usuario.rol !== 'admin') return res.status(403).json({ error: 'Solo administradores' })
+  try {
+    const insp = await Inspeccion.findByIdAndDelete(req.params.id)
+    if (!insp) return res.status(404).json({ error: 'Inspección no encontrada' })
+    res.json({ ok: true })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
 // ─── GET /:id/evidencia ───────────────────────────────────────────────────────
 router.get('/:id/evidencia', authMW, async (req, res) => {
   try {

@@ -961,9 +961,12 @@ async function abrirModalManual() {
   if (estacion) params.append('estacion', estacion)
   try { planItemsCacheManual = await apiFetch('/plan?' + params) } catch { planItemsCacheManual = [] }
 
+  // Solo mostrar ítems con tareas configuradas (excluye datos de prueba)
+  const itemsConTareas = planItemsCacheManual.filter(i => i.tareas?.length > 0)
+
   const sel = document.getElementById('manual-item-plan')
   sel.innerHTML = '<option value="">Seleccioná un equipo...</option>'
-  for (const item of planItemsCacheManual) {
+  for (const item of itemsConTareas) {
     const opt = document.createElement('option')
     opt.value = item._id
     opt.textContent = `${item.equipo}${item.codigoPrefix ? ' (' + item.codigoPrefix + ')' : ''} — ${PERIOD_LABEL[item.periodicidad] || item.periodicidad}`
@@ -1261,13 +1264,16 @@ async function loadRepositorio() {
           const evidenciaBtn = i.evidenciaNombre
             ? `<button class="btn-secondary btn-sm" onclick="verEvidencia('${i._id}')" title="${escHtml(i.evidenciaNombre)}">📎 Ver</button>`
             : `<span style="color:var(--text-secondary);font-size:12px">—</span>`
+          const elimBtn = usuarioActual?.rol === 'admin'
+            ? `<button class="btn-icon-sm" style="color:var(--danger-color)" onclick="eliminarInspeccion('${i._id}')" title="Eliminar verificación">✕</button>`
+            : ''
           return `<tr>
             <td style="white-space:nowrap">${fecha}</td>
             <td>${i.estacion}</td>
             <td style="white-space:nowrap">${tipo}</td>
             <td style="font-size:12px;color:var(--text-secondary)">${tareas || '—'}</td>
             <td style="text-align:center">${fallas}</td>
-            <td style="text-align:center">${evidenciaBtn}</td>
+            <td style="text-align:center;display:flex;gap:6px;justify-content:center;align-items:center">${evidenciaBtn}${elimBtn}</td>
           </tr>`
         }).join('')}
       </tbody>
@@ -1286,6 +1292,17 @@ async function verEvidencia(id) {
     const url   = URL.createObjectURL(blob)
     window.open(url, '_blank')
   } catch { showNotification('Error al cargar evidencia.', 'error') }
+}
+
+async function eliminarInspeccion(id) {
+  if (!confirm('¿Eliminar esta verificación? Se quitará del ejecutado y no se puede deshacer.')) return
+  try {
+    await apiFetch(`/inspecciones/${id}`, { method: 'DELETE' })
+    showNotification('Verificación eliminada.', 'success')
+    loadRepositorio()
+    loadCumplimiento()
+    loadKpis()
+  } catch (err) { showNotification('Error: ' + err.message, 'error') }
 }
 
 // ─── Utilidades ───────────────────────────────────────────────────────────────
