@@ -699,7 +699,7 @@ async function loadCumplimiento() {
           : (RESP_LABEL[t.responsable] || t.responsable)
         html += `<tr>
           ${idx === 0 ? `<td class="col-equipo equipo-cell" rowspan="${grupo.tareas.length}"><strong>${grupo.equipo}</strong></td>` : ''}
-          <td class="col-tarea">${t.tarea}</td>
+          <td class="col-tarea">${t.tarea}${t.tarea?.includes(',') ? ' <span title="Parece que cargaste varias tareas juntas. Eliminá este ítem y usá \'Carga múltiple\' (una tarea por línea)." style="color:var(--warning-color);cursor:help;font-size:13px">⚠</span>' : ''}</td>
           <td class="col-resp"><span class="resp-badge resp-${(t.responsable||'').toLowerCase()}" title="${respLabel}">${t.responsable}</span></td>
           ${periodos.map(p => `<td class="col-period">${t.periodicidad === p ? '<span class="period-check">✓</span>' : ''}</td>`).join('')}
           ${usuarioActual?.rol === 'admin' ? `<td class="col-acc" style="white-space:nowrap">
