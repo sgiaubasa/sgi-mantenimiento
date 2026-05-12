@@ -8,19 +8,23 @@ router.post('/login', async (req, res) => {
   const { email, password } = req.body
   if (!email || !password) return res.status(400).json({ error: 'Email y contraseña requeridos' })
 
-  const usuario = await Usuario.findOne({ email, activo: true })
-  if (!usuario) return res.status(401).json({ error: 'Credenciales incorrectas' })
+  try {
+    const usuario = await Usuario.findOne({ email, activo: true })
+    if (!usuario) return res.status(401).json({ error: 'Credenciales incorrectas' })
 
-  const ok = await usuario.verificarPassword(password)
-  if (!ok)  return res.status(401).json({ error: 'Credenciales incorrectas' })
+    const ok = await usuario.verificarPassword(password)
+    if (!ok) return res.status(401).json({ error: 'Credenciales incorrectas' })
 
-  const token = jwt.sign(
-    { _id: usuario._id, nombre: usuario.nombre, rol: usuario.rol, estaciones: usuario.estaciones },
-    process.env.JWT_SECRET,
-    { expiresIn: '8h' }
-  )
+    const token = jwt.sign(
+      { _id: usuario._id, nombre: usuario.nombre, rol: usuario.rol, estaciones: usuario.estaciones },
+      process.env.JWT_SECRET,
+      { expiresIn: '8h' }
+    )
 
-  res.json({ token, usuario: { _id: usuario._id, nombre: usuario.nombre, rol: usuario.rol, estaciones: usuario.estaciones } })
+    res.json({ token, usuario: { _id: usuario._id, nombre: usuario.nombre, rol: usuario.rol, estaciones: usuario.estaciones } })
+  } catch (e) {
+    res.status(500).json({ error: 'Error del servidor: ' + e.message })
+  }
 })
 
 // ── GET /api/auth/me ─────────────────────────────────────────────────────────
