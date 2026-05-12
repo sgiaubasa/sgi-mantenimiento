@@ -148,6 +148,11 @@ const viewMeta = {
     subtitle: 'Análisis automático con IA · Gestión de desvíos (Anexo 3.3)',
     onEnter: () => { loadKpis(); loadCumplimiento() }
   },
+  'view-repositorio': {
+    title: 'Repositorio de Verificaciones',
+    subtitle: 'Historial de inspecciones con evidencia para auditoría',
+    onEnter: () => loadRepositorio()
+  },
   'view-desvios': {
     title: 'Desvíos Pendientes',
     subtitle: 'Bandeja de gestión y cierre de desvíos abiertos',
@@ -192,13 +197,13 @@ async function loadKpis() {
     if (d.disponibilidad !== null && d.itemsTotal > 0) {
       setText('kpi-disponibilidad',     d.disponibilidad)
       setText('kpi-disponibilidad-sub', `${d.itemsConformes} conformes de ${d.itemsTotal} verificados`)
-      colorearTrend('kpi-disponibilidad', d.disponibilidad, 90)
+      colorearTrend('kpi-disponibilidad', d.disponibilidad, 85)
     }
 
     if (d.eficaciaDesvios !== null && d.desviosDetectadosMes > 0) {
       setText('kpi-eficacia',     d.eficaciaDesvios)
       setText('kpi-eficacia-sub', `${d.cerradosMes} cerrados de ${d.desviosDetectadosMes} detectados`)
-      colorearTrend('kpi-eficacia', d.eficaciaDesvios, 80)
+      colorearTrend('kpi-eficacia', d.eficaciaDesvios, 75)
     }
 
     const sub = document.getElementById('kpi-resumen-total-sub')
@@ -956,6 +961,8 @@ async function abrirModalManual() {
 
 function cerrarModalManual() {
   document.getElementById('modal-manual-insp').style.display = 'none'
+  const evInput = document.getElementById('manual-evidencia')
+  if (evInput) evInput.value = ''
 }
 
 let desvioManualCount = 0
@@ -1057,12 +1064,14 @@ async function guardarManual() {
   const btn = document.querySelector('#modal-manual-insp .btn-primary')
   if (btn) { btn.disabled = true; btn.textContent = 'Guardando...' }
   try {
-    await apiFetch('/inspecciones/manual', {
-      method: 'POST',
-      body: JSON.stringify({ itemPlanId: itemId, fecha, unidades, tareasVerificadas, observaciones, desviosNuevos })
-    })
+    const fd = new FormData()
+    fd.append('datos', JSON.stringify({ itemPlanId: itemId, fecha, unidades, tareasVerificadas, observaciones, desviosNuevos }))
+    const evFile = document.getElementById('manual-evidencia')?.files?.[0]
+    if (evFile) fd.append('evidencia', evFile)
+    await apiFormFetch('/inspecciones/manual', fd)
     const msgs = ['Verificación manual registrada.']
     if (desviosNuevos.length) msgs.push(`${desviosNuevos.length} desvío(s) enviado(s) a gestión.`)
+    if (evFile) msgs.push('Evidencia adjuntada.')
     showNotification(msgs.join(' '), 'success')
     desvioManualCount = 0
     cerrarModalManual()
@@ -1195,6 +1204,68 @@ async function guardarCambioPeriod() {
     cerrarModalEditarPeriod()
     loadCumplimiento()
   } catch (err) { showNotification('Error: ' + err.message, 'error') }
+}
+
+// ─── Repositorio de verificaciones ───────────────────────────────────────────
+async function loadRepositorio() {
+  const lista    = document.getElementById('repo-lista')
+  const estacion = document.getElementById('repo-estacion')?.value || ''
+  if (!lista) return
+  lista.innerHTML = '<p class="empty-state">Cargando...</p>'
+  try {
+    const inspecciones = await apiFetch('/inspecciones')
+    const filtradas = estacion ? inspecciones.filter(i => i.estacion === estacion) : inspecciones
+    if (!filtradas.length) {
+      lista.innerHTML = '<div class="empty-state-card"><span style="font-size:2rem">📂</span><p>No hay verificaciones registradas.</p></div>'
+      return
+    }
+    lista.innerHTML = `<table class="tabla-plan" style="width:100%">
+      <thead>
+        <tr>
+          <th>Fecha</th>
+          <th>Estación</th>
+          <th>Tipo</th>
+          <th>Ítems verificados</th>
+          <th style="text-align:center">Fallas</th>
+          <th style="text-align:center">Evidencia</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${filtradas.map(i => {
+          const fecha = new Date(i.fecha || i.createdAt).toLocaleDateString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric' })
+          const tipo  = i.archivoNombre === 'Verificación manual' ? '✏ Manual' : '🤖 IA'
+          const fallas = i.tieneFallas
+            ? `<span style="color:var(--danger-color);font-weight:600">Sí (${(i.desviosGenerados||[]).length})</span>`
+            : `<span style="color:var(--success-color)">No</span>`
+          const tareas = (i.tareasVerificadas || []).slice(0, 3).join(', ') + (i.tareasVerificadas?.length > 3 ? '…' : '')
+          const evidenciaBtn = i.evidenciaNombre
+            ? `<button class="btn-secondary btn-sm" onclick="verEvidencia('${i._id}')" title="${escHtml(i.evidenciaNombre)}">📎 Ver</button>`
+            : `<span style="color:var(--text-secondary);font-size:12px">—</span>`
+          return `<tr>
+            <td style="white-space:nowrap">${fecha}</td>
+            <td>${i.estacion}</td>
+            <td style="white-space:nowrap">${tipo}</td>
+            <td style="font-size:12px;color:var(--text-secondary)">${tareas || '—'}</td>
+            <td style="text-align:center">${fallas}</td>
+            <td style="text-align:center">${evidenciaBtn}</td>
+          </tr>`
+        }).join('')}
+      </tbody>
+    </table>`
+  } catch (err) {
+    lista.innerHTML = `<p class="empty-state" style="color:var(--danger-color)">Error: ${err.message}</p>`
+  }
+}
+
+async function verEvidencia(id) {
+  try {
+    const token = localStorage.getItem('sgi_token')
+    const res   = await fetch(`/api/inspecciones/${id}/evidencia`, { headers: { Authorization: `Bearer ${token}` } })
+    if (!res.ok) { showNotification('Esta verificación no tiene evidencia adjunta.', 'error'); return }
+    const blob  = await res.blob()
+    const url   = URL.createObjectURL(blob)
+    window.open(url, '_blank')
+  } catch { showNotification('Error al cargar evidencia.', 'error') }
 }
 
 // ─── Utilidades ───────────────────────────────────────────────────────────────

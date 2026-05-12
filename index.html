@@ -54,6 +54,10 @@
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 9.36l-7.1 7.1a1 1 0 0 1-1.41-1.41l7.1-7.1a6 6 0 0 1 9.36-7.94l-3.77 3.77z"></path></svg>
                     Plan Mantenimiento
                 </a>
+                <a href="#" class="nav-item" data-target="view-repositorio">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>
+                    <span>Repositorio</span>
+                </a>
                 <a href="#" class="nav-item" data-target="view-desvios">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
                     Desvíos Pendientes
@@ -105,9 +109,10 @@
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
                         </div>
                         <div class="kpi-info">
-                            <h3>Disponibilidad de Recursos</h3>
+                            <h3>Disponibilidad de Infraestructura</h3>
                             <p class="kpi-value" id="kpi-disponibilidad">—<span>%</span></p>
                             <span class="trend positive" id="kpi-disponibilidad-sub">Ítems conformes / verificados</span>
+                            <span style="font-size:11px;color:var(--text-secondary);margin-top:2px;display:block">Meta: ≥ 85%</span>
                         </div>
                     </div>
                     <div class="kpi-card">
@@ -115,9 +120,10 @@
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
                         </div>
                         <div class="kpi-info">
-                            <h3>Eficacia en Desvíos</h3>
+                            <h3>Gestión de Desvíos</h3>
                             <p class="kpi-value" id="kpi-eficacia">—<span>%</span></p>
                             <span class="trend neutral" id="kpi-eficacia-sub">Cerrados / Detectados</span>
+                            <span style="font-size:11px;color:var(--text-secondary);margin-top:2px;display:block">Meta: ≥ 75%</span>
                         </div>
                     </div>
                 </section>
@@ -129,7 +135,7 @@
                             <canvas id="gaugeChart"></canvas>
                             <div class="gauge-center">
                                 <span class="gauge-percentage" id="gauge-pct">—%</span>
-                                <span class="gauge-label">Objetivo: 90%</span>
+                                <span class="gauge-label">Meta: ≥ 85%</span>
                             </div>
                         </div>
                     </div>
@@ -383,6 +389,35 @@
                         </div>
                         <div id="desvios-lista">
                             <p class="empty-state">Cargando desvíos...</p>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <!-- ═══ VIEW: REPOSITORIO ════════════════════════════════════════ -->
+            <div id="view-repositorio" class="view-section" style="display:none;">
+                <section class="form-section">
+                    <div class="chart-card full-width">
+                        <div class="desvios-list-header">
+                            <div>
+                                <h3 class="chart-title">Repositorio de Verificaciones</h3>
+                                <p class="section-desc" style="margin:4px 0 0">Historial de inspecciones con evidencia adjunta para auditoría.</p>
+                            </div>
+                            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                                <select id="repo-estacion" style="font-size:13px;padding:6px 10px;border-radius:8px;border:1px solid #E0E5F2;background:var(--bg-color)" onchange="loadRepositorio()">
+                                    <option value="">Todas las estaciones</option>
+                                    <option value="Berazategui">Berazategui</option>
+                                    <option value="Bernal">Bernal</option>
+                                    <option value="Dock Sud">Dock Sud</option>
+                                    <option value="Hudson">Hudson</option>
+                                    <option value="Quilmes">Quilmes</option>
+                                    <option value="Samborombón">Samborombón</option>
+                                </select>
+                                <button class="btn-secondary btn-sm" onclick="loadRepositorio()">↺ Actualizar</button>
+                            </div>
+                        </div>
+                        <div id="repo-lista" style="margin-top:12px">
+                            <p class="empty-state">Cargando...</p>
                         </div>
                     </div>
                 </section>
@@ -743,6 +778,12 @@
                 <div class="form-group">
                     <label>Observaciones generales</label>
                     <textarea id="manual-obs" rows="2" placeholder="Ej: Todo conforme. Sin novedades." style="resize:vertical"></textarea>
+                </div>
+
+                <!-- Evidencia -->
+                <div class="form-group">
+                    <label>Evidencia <small style="font-weight:400;color:var(--text-secondary)">(opcional — foto o PDF para auditoría)</small></label>
+                    <input type="file" id="manual-evidencia" accept=".pdf,.jpg,.jpeg,.png,.webp,.gif" style="font-size:13px;padding:6px;border:1px solid #E0E5F2;border-radius:8px;background:var(--bg-color);width:100%;cursor:pointer">
                 </div>
 
                 <!-- Desvíos detectados -->

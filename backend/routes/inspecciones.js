@@ -51,10 +51,13 @@ router.post('/analizar', authMW, upload.single('archivo'), async (req, res) => {
 // ─── POST / ──────────────────────────────────────────────────────────────────
 // Guarda la inspección completa junto con gestión de desvíos.
 // Body (multipart):
-//   archivo: File
-//   datos:   JSON string { analisis, estacion, desviosNuevos[], desviosCerrar[] }
-router.post('/', authMW, upload.single('archivo'), async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'No se recibió archivo' })
+//   archivo:   File  — documento analizado por IA (se guarda como evidencia)
+//   evidencia: File? — archivo adicional de evidencia (opcional, solo si no viene con archivo IA)
+//   datos:     JSON string { analisis, estacion, desviosNuevos[], desviosCerrar[] }
+router.post('/', authMW, upload.fields([{ name: 'archivo', maxCount: 1 }, { name: 'evidencia', maxCount: 1 }]), async (req, res) => {
+  const archivoIA   = req.files?.archivo?.[0]
+  const archivoEv   = req.files?.evidencia?.[0]
+  if (!archivoIA) return res.status(400).json({ error: 'No se recibió archivo' })
 
   let body
   try {
@@ -69,12 +72,14 @@ router.post('/', authMW, upload.single('archivo'), async (req, res) => {
 
   const tieneFallas = (analisis.equipos || []).some(e => e.estado === 'falla')
 
-  // Regla de negocio: si hay fallas, deben gestionarse antes de guardar
   if (tieneFallas && desviosNuevos.length === 0) {
     return res.status(400).json({
       error: 'Los desvíos detectados requieren gestión obligatoria antes de guardar.'
     })
   }
+
+  // La evidencia es el archivo extra si existe, sino el documento IA
+  const evArchivo = archivoEv || archivoIA
 
   try {
     // 1. Guardar inspección
@@ -82,12 +87,15 @@ router.post('/', authMW, upload.single('archivo'), async (req, res) => {
       estacion:              analisis.estacion || estacion || 'No especificada',
       operador:              analisis.operador  || null,
       fecha:                 analisis.fecha ? new Date(analisis.fecha) : new Date(),
-      archivoNombre:         req.file.originalname,
-      archivoMimeType:       req.file.mimetype,
+      archivoNombre:         archivoIA.originalname,
+      archivoMimeType:       archivoIA.mimetype,
       equipos:               analisis.equipos || [],
       tieneFallas,
       tareasVerificadas:     analisis.tareasVerificadas || [],
-      observacionesGenerales: analisis.observacionesGenerales || null
+      observacionesGenerales: analisis.observacionesGenerales || null,
+      evidenciaNombre:       evArchivo.originalname,
+      evidenciaMimeType:     evArchivo.mimetype,
+      evidenciaData:         evArchivo.buffer
     })
     await insp.save()
 
@@ -137,11 +145,10 @@ router.post('/', authMW, upload.single('archivo'), async (req, res) => {
 })
 
 // ─── POST /manual ────────────────────────────────────────────────────────────
-// Registra una verificación manual sin IA. Crea un registro de Inspeccion
-// con los equipos/unidades confirmados como "correcto", para que cuente
-// en el indicador de cumplimiento del plan.
-router.post('/manual', authMW, async (req, res) => {
-  const { itemPlanId, fecha, unidades = [], tareasVerificadas = [], observaciones, desviosNuevos = [] } = req.body
+router.post('/manual', authMW, upload.single('evidencia'), async (req, res) => {
+  let parsed = {}
+  try { parsed = JSON.parse(req.body.datos || '{}') } catch { return res.status(400).json({ error: 'datos inválido' }) }
+  const { itemPlanId, fecha, unidades = [], tareasVerificadas = [], observaciones, desviosNuevos = [] } = parsed
   if (!itemPlanId) return res.status(400).json({ error: 'itemPlanId requerido' })
 
   try {
@@ -173,7 +180,10 @@ router.post('/manual', authMW, async (req, res) => {
       tareasVerificadas:     tareasVerificadas.length ? tareasVerificadas : (item.tareas || []),
       observacionesGenerales: observaciones || null,
       tipoVerificacion:      'Personal AUBASA',
-      usuarioId:             req.usuario._id
+      usuarioId:             req.usuario._id,
+      evidenciaNombre:       req.file ? req.file.originalname : null,
+      evidenciaMimeType:     req.file ? req.file.mimetype : null,
+      evidenciaData:         req.file ? req.file.buffer : null
     })
 
     // Crear desvíos
@@ -244,12 +254,27 @@ router.get('/kpis', authMW, async (req, res) => {
   }
 })
 
+// ─── GET /:id/evidencia ───────────────────────────────────────────────────────
+router.get('/:id/evidencia', authMW, async (req, res) => {
+  try {
+    const insp = await Inspeccion.findById(req.params.id)
+      .select('evidenciaData evidenciaMimeType evidenciaNombre')
+    if (!insp?.evidenciaData) return res.status(404).json({ error: 'Sin evidencia registrada' })
+    res.set('Content-Type', insp.evidenciaMimeType)
+    res.set('Content-Disposition', `inline; filename="${encodeURIComponent(insp.evidenciaNombre)}"`)
+    res.send(insp.evidenciaData)
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
 // ─── GET / ───────────────────────────────────────────────────────────────────
 router.get('/', async (req, res) => {
   try {
     const inspecciones = await Inspeccion.find()
       .sort({ createdAt: -1 })
       .limit(50)
+      .select('-evidenciaData')
       .populate('desviosGenerados', 'estado codigoEquipo')
     res.json(inspecciones)
   } catch (e) {

@@ -19,9 +19,12 @@ const inspeccionSchema = new Schema({
   tareasVerificadas:      [String],   // ítems/columnas verificados, ej: ['Puertas', 'Ventanas']
   observacionesGenerales: String,
   tipoVerificacion:       { type: String, enum: ['Personal AUBASA', 'Proveedor Externo'], default: 'Personal AUBASA' },
-  proveedorExterno:       String,   // nombre de la empresa si tipoVerificacion = 'Proveedor Externo'
+  proveedorExterno:       String,
   usuarioId:              { type: Schema.Types.ObjectId, ref: 'Usuario' },
-  desviosGenerados:       [{ type: Schema.Types.ObjectId, ref: 'Desvio' }]
+  desviosGenerados:       [{ type: Schema.Types.ObjectId, ref: 'Desvio' }],
+  evidenciaNombre:        String,
+  evidenciaMimeType:      String,
+  evidenciaData:          Buffer
 }, { timestamps: true })
 
 module.exports = mongoose.model('Inspeccion', inspeccionSchema)
