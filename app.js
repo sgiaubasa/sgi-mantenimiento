@@ -650,7 +650,7 @@ const MESES_ES    = ['enero','febrero','marzo','abril','mayo','junio','julio','a
 const MESES_LABEL = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
 const RESP_LABEL  = {
   SUP:'Supervisor', MAA:'Mtto. AA', MAE:'Personal', MAN:'Personal Aubasa',
-  MVI:'Personal', MED:'Personal', ELE:'Electricista', JES:'Jefe Estación', PEX:'Prov. Externo'
+  MVI:'Personal', MED:'Personal', ELE:'Electricista', JES:'Jefe Estación', TG:'Tareas Generales', PEX:'Prov. Externo'
 }
 const PERIOD_LABEL = {
   diario:'Diario', semanal:'Semanal', quincenal:'Quincenal', mensual:'Mensual',
