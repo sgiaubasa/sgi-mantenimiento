@@ -1,0 +1,11 @@
+{
+  "name": "sgi-mantenimiento",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "npm install --prefix backend",
+    "start": "node backend/server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
