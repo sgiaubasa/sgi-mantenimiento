@@ -815,7 +815,7 @@ async function guardarItemPlan() {
   const equipo   = document.getElementById('ip-equipo').value.trim()
   const tareasRaw = document.getElementById('ip-tareas').value
   const tareas   = tareasRaw.split('\n').map(t => t.trim()).filter(Boolean)
-  const unidades = document.getElementById('ip-unidades').value.split('\n').map(u => u.trim()).filter(Boolean)
+  const unidades = document.getElementById('ip-unidades').value.split(/[\n,]+/).map(u => u.trim()).filter(Boolean)
   const resp     = document.getElementById('ip-responsable').value
 
   if (!equipo)         { showNotification('Ingresá el nombre del equipo.', 'error'); return }

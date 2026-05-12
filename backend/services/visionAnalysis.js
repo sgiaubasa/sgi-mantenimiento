@@ -43,7 +43,7 @@ Reglas estrictas:
  * @param {string} mimeType
  */
 async function analyzeDocument(fileBuffer, mimeType) {
-  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-8b' })
+  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
 
   const base64Data = fileBuffer.toString('base64')
 
