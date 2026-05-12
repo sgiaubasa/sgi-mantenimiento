@@ -5,27 +5,34 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
 const PROMPT = `Sos un sistema de análisis de registros de mantenimiento preventivo para AUBASA (Autopistas de Buenos Aires S.A.).
 
 Analizá el documento adjunto. Puede ser un Registro Genérico (Anexo 3.6), planilla de control de campo, o similar.
+El documento puede tener una tabla con filas de equipos (ej: CC 01, CC 02, AA-01) y columnas de ítems a verificar (ej: Puertas, Ventanas, Luminarias, Limpieza exterior).
 
 Devolvé ÚNICAMENTE un JSON válido sin texto adicional ni bloques markdown, con este formato exacto:
 {
   "estacion": "nombre de la estación o ubicación (string o null)",
   "fecha": "fecha del registro en formato YYYY-MM-DD (string o null)",
   "operador": "nombre del responsable (string o null)",
+  "tareasVerificadas": ["Puertas", "Ventanas", "Luminarias"],
   "equipos": [
     {
-      "codigo": "código del equipo (ej: GE-01, LM-03, SM-02, BM-01)",
+      "codigo": "código del equipo (ej: CC 01, CC-01, GE-01, AA-01)",
       "descripcion": "descripción del ítem o instalación",
       "estado": "correcto o falla",
-      "observacion": "descripción del problema si estado es falla, sino null"
+      "observacion": "descripción del problema si estado es falla, sino null",
+      "tareasOk": ["Puertas", "Ventanas"],
+      "tareasConFalla": ["Luminarias"]
     }
   ],
   "observacionesGenerales": "observación general del documento o null"
 }
 
 Reglas estrictas:
-- "estado" = "correcto": ítem marcado OK / Conforme / Funcionamiento Correcto / Sin Observaciones / tilde de check
-- "estado" = "falla": cualquier problema, desvío, observación negativa, cruz, ítem no cumplido
-- Los códigos de equipo siguen el patrón LETRAS-NÚMERO (GE-01, LM-03, SM-02, BM-01, IN-01)
+- "tareasVerificadas": lista de los nombres de columnas/ítems que se verifican en el documento (las que aparecen como encabezados)
+- "estado" del equipo = "correcto" si todos sus ítems están OK; "falla" si al menos uno tiene problema
+- "tareasOk": lista de ítems del equipo que están marcados OK/Conforme/check
+- "tareasConFalla": lista de ítems con problema, desvío, observación negativa o sin marcar
+- Los códigos de equipo siguen patrones como CC 01, CC-01, AA-01, GE-01, LM-03 (letras + número)
+- Si no hay tabla de ítems, dejá "tareasVerificadas", "tareasOk", "tareasConFalla" como []
 - Si no podés extraer un campo con certeza, usá null
 - Si el documento no es un registro de mantenimiento reconocible, devolvé "equipos": []
 - No inventes datos que no estén en el documento`

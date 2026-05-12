@@ -763,23 +763,24 @@ function toggleProveedorItemPlan(val) {
   if (i) i.required = val === 'PEX'
 }
 
-document.getElementById('form-item-plan')?.addEventListener('submit', async e => {
-  e.preventDefault()
+function buildItemPlanBody() {
   const resp = document.getElementById('ip-responsable').value
-  const prov = document.getElementById('ip-proveedor').value.trim()
-  if (resp === 'PEX' && !prov) { showNotification('Ingresá el nombre del proveedor.', 'error'); return }
-
-  const body = {
+  return {
     estacion:         document.getElementById('ip-estacion').value,
     anio:             parseInt(document.getElementById('ip-anio').value, 10),
     equipo:           document.getElementById('ip-equipo').value.trim(),
     codigoPrefix:     document.getElementById('ip-codigo').value.trim().toUpperCase() || undefined,
     tarea:            document.getElementById('ip-tarea').value.trim(),
     responsable:      resp,
-    proveedorExterno: resp === 'PEX' ? prov : null,
+    proveedorExterno: resp === 'PEX' ? document.getElementById('ip-proveedor').value.trim() : null,
     periodicidad:     document.getElementById('ip-periodicidad').value
   }
+}
 
+document.getElementById('form-item-plan')?.addEventListener('submit', async e => {
+  e.preventDefault()
+  const body = buildItemPlanBody()
+  if (body.responsable === 'PEX' && !body.proveedorExterno) { showNotification('Ingresá el nombre del proveedor.', 'error'); return }
   try {
     await apiFetch('/plan', { method: 'POST', body: JSON.stringify(body) })
     showNotification('Tarea agregada al plan.')
@@ -787,6 +788,23 @@ document.getElementById('form-item-plan')?.addEventListener('submit', async e =>
     loadCumplimiento()
   } catch (err) { showNotification('Error: ' + err.message, 'error') }
 })
+
+async function guardarYAgregarOtro() {
+  const body = buildItemPlanBody()
+  if (body.responsable === 'PEX' && !body.proveedorExterno) { showNotification('Ingresá el nombre del proveedor.', 'error'); return }
+  if (!body.equipo || !body.tarea) { showNotification('Completá Equipo y Tarea.', 'error'); return }
+  const btn = document.getElementById('btn-guardar-otro')
+  btn.disabled = true; btn.textContent = 'Guardando...'
+  try {
+    await apiFetch('/plan', { method: 'POST', body: JSON.stringify(body) })
+    showNotification('Tarea guardada. Podés agregar otra.', 'success')
+    // Limpiar solo la tarea, mantener equipo/estacion/año/responsable/periodicidad
+    document.getElementById('ip-tarea').value = ''
+    document.getElementById('ip-tarea').focus()
+    loadCumplimiento()
+  } catch (err) { showNotification('Error: ' + err.message, 'error') }
+  finally { btn.disabled = false; btn.textContent = 'Guardar y agregar otro' }
+}
 
 async function eliminarItemPlan(id) {
   if (!confirm('¿Eliminar esta tarea del plan?')) return

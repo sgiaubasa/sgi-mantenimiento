@@ -85,6 +85,7 @@ router.post('/', authMW, upload.single('archivo'), async (req, res) => {
       archivoMimeType:       req.file.mimetype,
       equipos:               analisis.equipos || [],
       tieneFallas,
+      tareasVerificadas:     analisis.tareasVerificadas || [],
       observacionesGenerales: analisis.observacionesGenerales || null
     })
     await insp.save()

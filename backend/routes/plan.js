@@ -52,26 +52,43 @@ router.get('/cumplimiento', authMW, async (req, res) => {
     if (estacion) filtroInsp.estacion = estacion
     const inspecciones = await Inspeccion.find(filtroInsp).select('createdAt equipos estacion').lean()
 
-    // Contar inspecciones reales por mes y por codigoPrefix
-    const ejecutadoPorMesPrefix = {} // { 'enero': { 'CP': 5, 'AA': 3 } }
-    const ejecutadoPorMes = {}       // { 'enero': 10 }
+    // Inspecciones por mes, y por mes+prefijo (para cruzar con codigoPrefix del plan)
+    // ejecutadoPorMesPrefix: { 'enero': { 'CC': 2, 'AA': 1 } }  → inspecciones que contenían ese prefijo
+    // ejecutadoPorMes: { 'enero': 3 }  → total inspecciones (fallback si item no tiene codigoPrefix)
+    const ejecutadoPorMesPrefix = {}
+    const ejecutadoPorMes = {}
     for (const insp of inspecciones) {
       const mes = MESES[new Date(insp.createdAt).getMonth()]
       ejecutadoPorMes[mes] = (ejecutadoPorMes[mes] || 0) + 1
       if (!ejecutadoPorMesPrefix[mes]) ejecutadoPorMesPrefix[mes] = {}
+      const prefijosInsp = new Set()
       for (const eq of (insp.equipos || [])) {
-        const prefix = (eq.codigo || '').slice(0, 2).toUpperCase()
-        ejecutadoPorMesPrefix[mes][prefix] = (ejecutadoPorMesPrefix[mes][prefix] || 0) + 1
+        // Extrae prefijo: "CC 01" → "CC", "AA-01" → "AA"
+        const prefix = (eq.codigo || '').replace(/[-\s].*/, '').toUpperCase()
+        if (prefix) prefijosInsp.add(prefix)
+      }
+      for (const p of prefijosInsp) {
+        ejecutadoPorMesPrefix[mes][p] = (ejecutadoPorMesPrefix[mes][p] || 0) + 1
       }
     }
 
-    // Calcular planificado por mes (suma de frecuencias de todos los items)
+    // Calcular planificado y ejecutado por mes.
+    // Cada ítem del plan contribuye según su periodicidad.
+    // Si tiene codigoPrefix, el ejecutado se cuenta por inspecciones que incluyeron ese prefijo.
+    // Si no tiene codigoPrefix, se usa el total de inspecciones del mes (fallback).
     const resultado = MESES.map((mes, mesIdx) => {
       let planificado = 0
+      let ejecutado   = 0
       for (const item of items) {
-        planificado += frecuenciaMensual(item.periodicidad, mesIdx, anio)
+        const frec = frecuenciaMensual(item.periodicidad, mesIdx, anio)
+        if (frec === 0) continue
+        planificado += frec
+        if (item.codigoPrefix) {
+          ejecutado += ejecutadoPorMesPrefix[mes]?.[item.codigoPrefix.toUpperCase()] || 0
+        } else {
+          ejecutado += ejecutadoPorMes[mes] || 0
+        }
       }
-      const ejecutado = ejecutadoPorMes[mes] || 0
       return {
         mes,
         planificado,

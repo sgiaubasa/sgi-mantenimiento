@@ -16,6 +16,7 @@ const inspeccionSchema = new Schema({
   archivoMimeType:       String,
   equipos:               [equipoSchema],
   tieneFallas:            { type: Boolean, default: false },
+  tareasVerificadas:      [String],   // ítems/columnas verificados, ej: ['Puertas', 'Ventanas']
   observacionesGenerales: String,
   tipoVerificacion:       { type: String, enum: ['Personal AUBASA', 'Proveedor Externo'], default: 'Personal AUBASA' },
   proveedorExterno:       String,   // nombre de la empresa si tipoVerificacion = 'Proveedor Externo'
