@@ -51,8 +51,30 @@ router.get('/', async (req, res) => {
   }
 })
 
-// ─── DELETE /:id ─────────────────────────────────────────────────────────────
+// ─── PUT /:id ─── edición de campos del desvío (solo admin) ──────────────────
 const authMW = require('../middleware/auth')
+router.put('/:id', authMW, async (req, res) => {
+  if (req.usuario.rol !== 'admin') return res.status(403).json({ error: 'Solo administradores' })
+  try {
+    const desvio = await Desvio.findById(req.params.id)
+    if (!desvio) return res.status(404).json({ error: 'Desvío no encontrado' })
+
+    const { codigoEquipo, descripcionEquipo, observacionFalla, descripcionDesvio, accionImplementar, fechaEstimadaEjecucion } = req.body
+    if (codigoEquipo           !== undefined) desvio.codigoEquipo           = codigoEquipo
+    if (descripcionEquipo      !== undefined) desvio.descripcionEquipo      = descripcionEquipo
+    if (observacionFalla       !== undefined) desvio.observacionFalla       = observacionFalla
+    if (descripcionDesvio      !== undefined) desvio.descripcionDesvio      = descripcionDesvio
+    if (accionImplementar      !== undefined) desvio.accionImplementar      = accionImplementar
+    if (fechaEstimadaEjecucion !== undefined) desvio.fechaEstimadaEjecucion = new Date(fechaEstimadaEjecucion)
+
+    await desvio.save()
+    res.json(desvio)
+  } catch (e) {
+    res.status(400).json({ error: e.message })
+  }
+})
+
+// ─── DELETE /:id ─────────────────────────────────────────────────────────────
 router.delete('/:id', authMW, async (req, res) => {
   if (req.usuario.rol !== 'admin') return res.status(403).json({ error: 'Solo administradores' })
   try {

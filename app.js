@@ -286,6 +286,50 @@ async function loadResumen() {
   loadBarPMP()
 }
 
+function abrirModalEditarDesvio(d) {
+  document.getElementById('ed-desvio-id').value              = d._id
+  document.getElementById('ed-codigo').value                 = d.codigoEquipo || ''
+  document.getElementById('ed-descripcion-equipo').value     = d.descripcionEquipo || ''
+  document.getElementById('ed-observacion-falla').value      = d.observacionFalla || ''
+  document.getElementById('ed-descripcion-desvio').value     = d.descripcionDesvio || ''
+  document.getElementById('ed-accion').value                 = d.accionImplementar || ''
+  document.getElementById('ed-fecha-estimada').value         = d.fechaEstimadaEjecucion
+    ? new Date(d.fechaEstimadaEjecucion).toISOString().slice(0, 10)
+    : ''
+  document.getElementById('modal-editar-desvio').style.display = 'flex'
+}
+
+function cerrarModalEditarDesvio() {
+  document.getElementById('modal-editar-desvio').style.display = 'none'
+}
+
+async function guardarEdicionDesvio() {
+  const id = document.getElementById('ed-desvio-id').value
+  const body = {
+    codigoEquipo:           document.getElementById('ed-codigo').value.trim(),
+    descripcionEquipo:      document.getElementById('ed-descripcion-equipo').value.trim(),
+    observacionFalla:       document.getElementById('ed-observacion-falla').value.trim(),
+    descripcionDesvio:      document.getElementById('ed-descripcion-desvio').value.trim(),
+    accionImplementar:      document.getElementById('ed-accion').value.trim(),
+    fechaEstimadaEjecucion: document.getElementById('ed-fecha-estimada').value
+  }
+  if (!body.descripcionDesvio || !body.accionImplementar || !body.fechaEstimadaEjecucion) {
+    return alert('Completá los campos obligatorios.')
+  }
+  const btn = document.querySelector('#modal-editar-desvio .btn-primary')
+  try {
+    if (btn) { btn.disabled = true; btn.textContent = 'Guardando...' }
+    await apiFetch(`/desvios/${id}`, { method: 'PUT', body: JSON.stringify(body) })
+    cerrarModalEditarDesvio()
+    loadHistorialDesvios()
+    loadDesviosPendientes()
+  } catch (err) {
+    alert('Error: ' + err.message)
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Guardar cambios' }
+  }
+}
+
 async function eliminarDesvio(id) {
   if (!confirm('¿Eliminar este desvío? Se quitará de la base de datos y no se puede deshacer.')) return
   try {
@@ -338,8 +382,9 @@ async function loadHistorialDesvios() {
         const cierre = d.fechaRealCierre
           ? new Date(d.fechaRealCierre).toLocaleDateString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric' }) + (d.eficacia ? ` — ${d.eficacia}` : '')
           : '—'
-        const delBtn = usuarioActual?.rol === 'admin'
-          ? `<button class="btn-icon-sm" style="color:var(--danger-color)" onclick="eliminarDesvio('${d._id}')" title="Eliminar desvío">✕</button>`
+        const adminBtns = usuarioActual?.rol === 'admin'
+          ? `<button class="btn-icon-sm" style="color:var(--primary-color)" onclick='abrirModalEditarDesvio(${JSON.stringify(d)})' title="Editar desvío">✏</button>
+             <button class="btn-icon-sm" style="color:var(--danger-color)" onclick="eliminarDesvio('${d._id}')" title="Eliminar desvío">✕</button>`
           : ''
         return `<tr>
           <td style="white-space:nowrap;font-size:12px">${fecha}</td>
@@ -349,7 +394,7 @@ async function loadHistorialDesvios() {
           <td style="font-size:12px">${escHtml(d.accionImplementar || '—')}</td>
           <td style="text-align:center">${badge}</td>
           <td style="font-size:12px;white-space:nowrap">${cierre}</td>
-          <td style="text-align:center">${delBtn}</td>
+          <td style="text-align:center;white-space:nowrap">${adminBtns}</td>
         </tr>`
       }).join('')}</tbody>
     </table></div>`
