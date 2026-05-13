@@ -1,11 +1,13 @@
 const Groq     = require('groq-sdk')
 const pdfParse = require('pdf-parse')
+const { GoogleGenerativeAI } = require('@google/generative-ai')
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY })
+const groq  = new Groq({ apiKey: process.env.GROQ_API_KEY })
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
 
-// Modelo de visión (imágenes) y de texto (PDFs con texto extraíble)
 const VISION_MODEL = 'meta-llama/llama-4-scout-17b-16e-instruct'
 const TEXT_MODEL   = 'llama-3.3-70b-versatile'
+const GEMINI_MODEL = 'gemini-1.5-flash'
 
 const PROMPT_BASE = `Sos un sistema de análisis de registros de mantenimiento preventivo para AUBASA (Autopistas de Buenos Aires S.A.).
 
@@ -46,28 +48,26 @@ function parseRespuesta(raw) {
   return parsed
 }
 
-async function analyzeImage(fileBuffer, mimeType) {
+// Groq: imágenes con visión
+async function analyzeImageGroq(fileBuffer, mimeType) {
   const base64 = fileBuffer.toString('base64')
   const resp = await groq.chat.completions.create({
     model: VISION_MODEL,
-    messages: [{
-      role: 'user',
-      content: [
-        { type: 'image_url', image_url: { url: `data:${mimeType};base64,${base64}` } },
-        { type: 'text', text: PROMPT_BASE }
-      ]
-    }],
+    messages: [{ role: 'user', content: [
+      { type: 'image_url', image_url: { url: `data:${mimeType};base64,${base64}` } },
+      { type: 'text', text: PROMPT_BASE }
+    ]}],
     temperature: 0,
     max_tokens: 4096
   })
   return parseRespuesta(resp.choices[0].message.content)
 }
 
-async function analyzeText(text) {
+// Groq: texto extraído de PDF
+async function analyzeTextGroq(text) {
   const resp = await groq.chat.completions.create({
     model: TEXT_MODEL,
-    messages: [{
-      role: 'user',
+    messages: [{ role: 'user',
       content: `${PROMPT_BASE}\n\nContenido del documento:\n\`\`\`\n${text.slice(0, 12000)}\n\`\`\``
     }],
     temperature: 0,
@@ -76,26 +76,37 @@ async function analyzeText(text) {
   return parseRespuesta(resp.choices[0].message.content)
 }
 
+// Gemini: fallback para PDFs escaneados (sin texto extraíble)
+async function analyzePdfGemini(fileBuffer, mimeType) {
+  console.log('[IA] PDF escaneado → usando Gemini como fallback')
+  const model    = genAI.getGenerativeModel({ model: GEMINI_MODEL })
+  const base64   = fileBuffer.toString('base64')
+  const result   = await model.generateContent([{ inlineData: { mimeType, data: base64 } }, PROMPT_BASE])
+  return parseRespuesta(result.response.text())
+}
+
 async function analyzeDocument(fileBuffer, mimeType) {
-  // PDF: intentar extraer texto primero
+  // ── PDFs ──────────────────────────────────────────────────────────────────
   if (mimeType === 'application/pdf') {
+    // 1. Intentar extraer texto (PDFs digitales)
     try {
-      const data = await pdfParse(fileBuffer)
+      const data  = await pdfParse(fileBuffer)
       const texto = data.text?.trim() || ''
       if (texto.length > 100) {
-        console.log(`[IA] PDF con texto (${texto.length} chars), usando modelo de texto`)
-        return await analyzeText(texto)
+        console.log(`[IA] PDF digital (${texto.length} chars) → Groq texto`)
+        return await analyzeTextGroq(texto)
       }
     } catch (e) {
-      console.log('[IA] pdf-parse falló:', e.message)
+      console.log('[IA] pdf-parse error:', e.message)
     }
-    // PDF escaneado sin texto → intentar con visión (primera página como imagen no es posible sin ImageMagick)
-    throw new Error('El PDF parece ser una imagen escaneada. Por favor subilo como JPG o PNG para que la IA pueda leerlo.')
+
+    // 2. PDF escaneado → Gemini (único que lo soporta nativamente gratis)
+    return await analyzePdfGemini(fileBuffer, mimeType)
   }
 
-  // Imágenes: usar modelo de visión
-  console.log(`[IA] Analizando imagen ${mimeType} con ${VISION_MODEL}`)
-  return await analyzeImage(fileBuffer, mimeType)
+  // ── Imágenes → Groq Vision ────────────────────────────────────────────────
+  console.log(`[IA] Imagen ${mimeType} → Groq visión`)
+  return await analyzeImageGroq(fileBuffer, mimeType)
 }
 
 module.exports = { analyzeDocument }
