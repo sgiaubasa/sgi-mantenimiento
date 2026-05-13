@@ -139,15 +139,18 @@ router.put('/:id', authMW, async (req, res) => {
       const fechaDesde = new Date(aplicarDesde + 'T00:00:00')
       const mesInicio  = fechaDesde.getMonth()
 
-      // Si el mes seleccionado coincide con el vigenciaDesde actual → actualizar en lugar de versionar
+      // Si el mes seleccionado coincide con el vigenciaDesde actual (o no tiene vigenciaDesde)
+      // → actualizar en lugar de versionar
       const vigDesdeActual = itemActual.vigenciaDesde ? new Date(itemActual.vigenciaDesde) : null
-      const mismoMes = vigDesdeActual &&
+      const mismoMes = !vigDesdeActual || (
         vigDesdeActual.getFullYear() === fechaDesde.getFullYear() &&
         vigDesdeActual.getMonth()    === fechaDesde.getMonth()
+      )
 
       if (mismoMes) {
         itemActual.periodicidad = periodicidad
         itemActual.mesInicio    = mesInicio
+        if (!vigDesdeActual) itemActual.vigenciaDesde = fechaDesde
         await itemActual.save()
         return res.json(itemActual)
       }

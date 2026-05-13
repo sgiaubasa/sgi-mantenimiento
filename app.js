@@ -1020,11 +1020,12 @@ document.getElementById('plan-estacion')?.addEventListener('change', loadCumplim
 const MESES_NOMBRES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
 
 function onCambioPeriodicidadPlan(val) {
-  const necesita = ['trimestral', 'semestral', 'anual'].includes(val)
+  const necesita = ['bimestral', 'trimestral', 'semestral', 'anual'].includes(val)
   document.getElementById('grupo-mes-inicio').style.display = necesita ? 'block' : 'none'
   const hint = document.getElementById('mes-inicio-hint')
   if (!hint) return
-  if (val === 'trimestral') hint.textContent = 'Los otros meses serán +3 y +6 meses después'
+  if (val === 'bimestral')  hint.textContent = 'El ciclo arranca en este mes y se repite cada 2 meses'
+  else if (val === 'trimestral') hint.textContent = 'Los otros meses serán +3 y +6 meses después'
   else if (val === 'semestral') hint.textContent = 'El segundo mes será 6 meses después'
   else if (val === 'anual') hint.textContent = 'Solo se planifica ese mes cada año'
   else hint.textContent = ''
@@ -1090,7 +1091,7 @@ async function guardarItemPlan() {
     responsable:      resp,
     proveedorExterno: resp === 'PEX' ? document.getElementById('ip-proveedor').value.trim() : null,
     periodicidad,
-    mesInicio:        ['trimestral','semestral','anual'].includes(periodicidad)
+    mesInicio:        ['bimestral','trimestral','semestral','anual'].includes(periodicidad)
                         ? parseInt(document.getElementById('ip-mes-inicio').value, 10)
                         : 0,
     vigenciaDesde:    document.getElementById('ip-vigencia-desde').value || undefined
@@ -1432,18 +1433,12 @@ async function guardarCambioPeriod() {
   const tareas       = _getChipValues('ep-tareas-chips')
   const unidades     = _getChipValues('ep-unidades-chips')
 
-  const item = (window._planItemsCache || {})[id]
-  const periodActual = item?.periodicidad
-
-  const cambioPeriod = periodicidad !== periodActual
-
   try {
+    // Siempre enviamos periodicidad + aplicarDesde para que el backend pueda
+    // corregir mesInicio aunque la periodicidad no haya cambiado
     await apiFetch(`/plan/${id}`, {
       method: 'PUT',
-      body: JSON.stringify(cambioPeriod
-        ? { periodicidad, aplicarDesde, tareas, unidades }
-        : { tareas, unidades }
-      )
+      body: JSON.stringify({ periodicidad, aplicarDesde, tareas, unidades })
     })
     showNotification('Cambios guardados.', 'success')
     cerrarModalEditarPeriod()
