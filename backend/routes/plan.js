@@ -145,7 +145,9 @@ router.put('/:id', authMW, async (req, res) => {
       await itemActual.save()
 
       const { _id, createdAt, updatedAt, __v, ...datosBase } = itemActual.toObject()
-      const nuevoItem = await ItemPlan.create({ ...datosBase, periodicidad, vigenciaDesde: fechaDesde, vigenciaHasta: null })
+      // mesInicio = mes real de inicio del nuevo período (para cálculos de bimestral/trimestral/etc.)
+      const mesInicio = fechaDesde.getMonth()
+      const nuevoItem = await ItemPlan.create({ ...datosBase, periodicidad, mesInicio, vigenciaDesde: fechaDesde, vigenciaHasta: null })
       return res.status(201).json(nuevoItem)
     }
 

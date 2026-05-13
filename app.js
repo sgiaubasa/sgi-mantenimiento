@@ -1413,7 +1413,7 @@ function agregarUnidadEdicion() {
 function actualizarInfoEditarPeriod(periodViejo, periodNuevo) {
   const desde  = document.getElementById('ep-desde')?.value
   const mesIdx = desde ? new Date(desde + 'T12:00:00').getMonth() : new Date().getMonth()
-  const PERIOD_LBL = { diario:'Diario', semanal:'Semanal', quincenal:'Quincenal', mensual:'Mensual', trimestral:'Trimestral', semestral:'Semestral', anual:'Anual' }
+  const PERIOD_LBL = { diario:'Diario', semanal:'Semanal', quincenal:'Quincenal', mensual:'Mensual', bimestral:'Bimestral', trimestral:'Trimestral', semestral:'Semestral', anual:'Anual' }
   const info = document.getElementById('ep-info')
   if (!info) return
   info.innerHTML = `Meses anteriores a <strong>${MESES_NOMBRES[mesIdx]}</strong>: conservan <strong>${PERIOD_LBL[periodViejo]||periodViejo}</strong>.<br>
