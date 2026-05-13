@@ -293,9 +293,7 @@ function abrirModalEditarDesvio(d) {
   document.getElementById('ed-observacion-falla').value      = d.observacionFalla || ''
   document.getElementById('ed-descripcion-desvio').value     = d.descripcionDesvio || ''
   document.getElementById('ed-accion').value                 = d.accionImplementar || ''
-  document.getElementById('ed-fecha-estimada').value         = d.fechaEstimadaEjecucion
-    ? new Date(d.fechaEstimadaEjecucion).toISOString().slice(0, 10)
-    : ''
+  document.getElementById('ed-fecha-estimada').value         = toLocalISODate(d.fechaEstimadaEjecucion)
   document.getElementById('modal-editar-desvio').style.display = 'flex'
 }
 
@@ -373,7 +371,7 @@ async function loadHistorialDesvios() {
         ${usuarioActual?.rol === 'admin' ? '<th></th>' : ''}
       </tr></thead>
       <tbody>${desvios.map(d => {
-        const fecha  = formatDate(d.createdAt)
+        const fecha  = formatDate(d.idInspeccionOrigen?.fecha || d.createdAt)
         const est    = d.idInspeccionOrigen?.estacion || '—'
         const equipo = [d.codigoEquipo, d.descripcionEquipo].filter(Boolean).join(' · ')
         const badge  = d.estado === 'Cerrado'
@@ -1536,9 +1534,7 @@ async function abrirModalEditarInsp(id) {
 
     document.getElementById('ei-insp-id').value = id
     document.getElementById('ei-estacion').value = insp.estacion || ''
-    document.getElementById('ei-fecha').value = insp.fecha
-      ? new Date(insp.fecha).toISOString().split('T')[0]
-      : new Date(insp.createdAt).toISOString().split('T')[0]
+    document.getElementById('ei-fecha').value = toLocalISODate(insp.fecha || insp.createdAt)
     document.getElementById('ei-observaciones').value = insp.observacionesGenerales || ''
     document.getElementById('ei-desvios-nuevos').innerHTML = ''
 
@@ -1653,6 +1649,12 @@ function formatDate(dateStr) {
   if (!dateStr) return '—'
   try { return new Date(dateStr).toLocaleDateString('es-AR', _TZ) }
   catch { return dateStr }
+}
+// Devuelve YYYY-MM-DD en hora Argentina (para value de <input type="date">)
+function toLocalISODate(dateStr) {
+  if (!dateStr) return ''
+  try { return new Date(dateStr).toLocaleDateString('sv-SE', { timeZone: 'America/Argentina/Buenos_Aires' }) }
+  catch { return '' }
 }
 function escHtml(str) { return (str || '').replace(/'/g, "\\'").replace(/"/g, '&quot;') }
 
