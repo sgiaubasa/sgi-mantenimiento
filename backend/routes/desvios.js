@@ -51,6 +51,19 @@ router.get('/', async (req, res) => {
   }
 })
 
+// ─── DELETE /:id ─────────────────────────────────────────────────────────────
+const authMW = require('../middleware/auth')
+router.delete('/:id', authMW, async (req, res) => {
+  if (req.usuario.rol !== 'admin') return res.status(403).json({ error: 'Solo administradores' })
+  try {
+    const desvio = await Desvio.findByIdAndDelete(req.params.id)
+    if (!desvio) return res.status(404).json({ error: 'Desvío no encontrado' })
+    res.json({ ok: true })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
 // ─── PUT /:id/cerrar ─────────────────────────────────────────────────────────
 // Cierre manual: el usuario registra fecha real y evalúa eficacia
 router.put('/:id/cerrar', async (req, res) => {

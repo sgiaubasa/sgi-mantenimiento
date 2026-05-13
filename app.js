@@ -286,6 +286,18 @@ async function loadResumen() {
   loadBarPMP()
 }
 
+async function eliminarDesvio(id) {
+  if (!confirm('¿Eliminar este desvío? Se quitará de la base de datos y no se puede deshacer.')) return
+  try {
+    await apiFetch(`/desvios/${id}`, { method: 'DELETE' })
+    loadHistorialDesvios()
+    loadDesviosPendientes()
+    loadKpis()
+  } catch (err) {
+    alert('Error al eliminar: ' + err.message)
+  }
+}
+
 // Historial de desvíos con filtros
 async function loadHistorialDesvios() {
   const lista = document.getElementById('historial-desvios-lista')
@@ -314,6 +326,7 @@ async function loadHistorialDesvios() {
         <th>Fecha</th><th>Estación</th><th>Equipo</th>
         <th>Desvío detectado</th><th>Acción implementar</th>
         <th style="text-align:center">Estado</th><th>Cierre / Eficacia</th>
+        ${usuarioActual?.rol === 'admin' ? '<th></th>' : ''}
       </tr></thead>
       <tbody>${desvios.map(d => {
         const fecha  = new Date(d.createdAt).toLocaleDateString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric' })
@@ -325,6 +338,9 @@ async function loadHistorialDesvios() {
         const cierre = d.fechaRealCierre
           ? new Date(d.fechaRealCierre).toLocaleDateString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric' }) + (d.eficacia ? ` — ${d.eficacia}` : '')
           : '—'
+        const delBtn = usuarioActual?.rol === 'admin'
+          ? `<button class="btn-icon-sm" style="color:var(--danger-color)" onclick="eliminarDesvio('${d._id}')" title="Eliminar desvío">✕</button>`
+          : ''
         return `<tr>
           <td style="white-space:nowrap;font-size:12px">${fecha}</td>
           <td style="font-size:12px">${est}</td>
@@ -333,6 +349,7 @@ async function loadHistorialDesvios() {
           <td style="font-size:12px">${escHtml(d.accionImplementar || '—')}</td>
           <td style="text-align:center">${badge}</td>
           <td style="font-size:12px;white-space:nowrap">${cierre}</td>
+          <td style="text-align:center">${delBtn}</td>
         </tr>`
       }).join('')}</tbody>
     </table></div>`
