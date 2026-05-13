@@ -12,6 +12,7 @@ function frecuenciaMensual(periodicidad, mes, anio, mesInicio = 0) {
     case 'semanal':      return 4
     case 'quincenal':    return 2
     case 'mensual':      return 1
+    case 'bimestral':    return (mes - mesInicio + 12) % 2 === 0 ? 1 : 0
     case 'trimestral':   return (mes - mesInicio + 12) % 3 === 0 ? 1 : 0
     case 'semestral':    return (mes - mesInicio + 12) % 6 === 0 ? 1 : 0
     case 'anual':        return mes === mesInicio ? 1 : 0
