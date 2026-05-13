@@ -39,43 +39,51 @@ Reglas estrictas:
 
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 
-async function analyzeDocument(fileBuffer, mimeType) {
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+// Modelos en orden de fallback: prueba el primero, si falla por quota usa el siguiente
+const MODELOS = ['gemini-1.5-flash', 'gemini-1.5-flash-8b', 'gemini-2.0-flash-lite']
+const DELAYS_MS = [5000, 15000, 30000]
+
+async function tryModelo(modelName, fileBuffer, mimeType) {
+  const model = genAI.getGenerativeModel({ model: modelName })
   const base64Data = fileBuffer.toString('base64')
   const payload = [{ inlineData: { mimeType, data: base64Data } }, PROMPT]
+  const result = await model.generateContent(payload)
+  const rawText = result.response.text().trim()
+  const jsonText = rawText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
+  const parsed = JSON.parse(jsonText)
+  if (!Array.isArray(parsed.equipos)) parsed.equipos = []
+  return parsed
+}
 
-  const MAX_INTENTOS = 4
-  const DELAYS_MS = [3000, 8000, 20000] // esperas entre reintentos (3s, 8s, 20s)
-
-  for (let intento = 0; intento < MAX_INTENTOS; intento++) {
-    try {
-      const result = await model.generateContent(payload)
-      const rawText = result.response.text().trim()
-      const jsonText = rawText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
+async function analyzeDocument(fileBuffer, mimeType) {
+  for (let m = 0; m < MODELOS.length; m++) {
+    const modelName = MODELOS[m]
+    for (let intento = 0; intento < 3; intento++) {
       try {
-        const parsed = JSON.parse(jsonText)
-        if (!Array.isArray(parsed.equipos)) parsed.equipos = []
-        return parsed
-      } catch {
-        throw new Error('La IA no devolvió un JSON válido. Respuesta: ' + rawText.substring(0, 300))
-      }
-    } catch (err) {
-      const msg = err.message || ''
-      const esQuota = msg.includes('429') || msg.toLowerCase().includes('quota') || msg.toLowerCase().includes('rate')
+        console.log(`[IA] Intentando con ${modelName} (intento ${intento + 1})`)
+        return await tryModelo(modelName, fileBuffer, mimeType)
+      } catch (err) {
+        const msg = err.message || ''
+        const esQuota = msg.includes('429') || msg.toLowerCase().includes('quota') || msg.toLowerCase().includes('rate')
+        const esJson  = err instanceof SyntaxError || msg.includes('JSON')
 
-      if (esQuota && intento < MAX_INTENTOS - 1) {
-        const espera = DELAYS_MS[intento]
-        console.log(`[Gemini] Cuota excedida (intento ${intento + 1}/${MAX_INTENTOS}), esperando ${espera / 1000}s...`)
-        await sleep(espera)
-        continue
-      }
+        if (esJson) throw new Error('La IA no devolvió un JSON válido. Intentá con otro documento.')
 
-      if (esQuota) {
-        throw new Error('El servicio de IA está saturado. Intentá de nuevo en 1-2 minutos.')
+        if (esQuota) {
+          if (intento < 2) {
+            console.log(`[IA] Cuota ${modelName}, esperando ${DELAYS_MS[intento] / 1000}s...`)
+            await sleep(DELAYS_MS[intento])
+            continue
+          }
+          // Agotó reintentos en este modelo → probar el siguiente
+          console.log(`[IA] Cambiando de modelo: ${modelName} → ${MODELOS[m + 1] || 'ninguno'}`)
+          break
+        }
+        throw err
       }
-      throw err
     }
   }
+  throw new Error('El servicio de IA no está disponible en este momento. Intentá en unos minutos o usá la carga manual.')
 }
 
 module.exports = { analyzeDocument }
