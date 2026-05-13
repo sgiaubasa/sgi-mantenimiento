@@ -1,13 +1,10 @@
 const Groq     = require('groq-sdk')
 const pdfParse = require('pdf-parse')
-const { GoogleGenerativeAI } = require('@google/generative-ai')
 
-const groq  = new Groq({ apiKey: process.env.GROQ_API_KEY })
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY })
 
 const VISION_MODEL = 'meta-llama/llama-4-scout-17b-16e-instruct'
 const TEXT_MODEL   = 'llama-3.3-70b-versatile'
-const GEMINI_MODEL = 'gemini-2.0-flash'
 
 const PROMPT_BASE = `Sos un sistema de análisis de registros de mantenimiento preventivo para AUBASA (Autopistas de Buenos Aires S.A.).
 
@@ -48,7 +45,25 @@ function parseRespuesta(raw) {
   return parsed
 }
 
-// Groq: imágenes con visión
+// Convierte primera página de PDF a PNG usando pdfjs-dist + canvas
+async function pdfToPng(fileBuffer) {
+  const pdfjsLib    = require('pdfjs-dist/legacy/build/pdf.js')
+  const { createCanvas } = require('canvas')
+
+  const data = new Uint8Array(fileBuffer)
+  const doc  = await pdfjsLib.getDocument({ data, verbosity: 0 }).promise
+  const page = await doc.getPage(1)
+
+  const scale    = 2
+  const viewport = page.getViewport({ scale })
+  const canvas   = createCanvas(viewport.width, viewport.height)
+  const ctx      = canvas.getContext('2d')
+
+  await page.render({ canvasContext: ctx, viewport }).promise
+
+  return canvas.toBuffer('image/png')
+}
+
 async function analyzeImageGroq(fileBuffer, mimeType) {
   const base64 = fileBuffer.toString('base64')
   const resp = await groq.chat.completions.create({
@@ -63,7 +78,6 @@ async function analyzeImageGroq(fileBuffer, mimeType) {
   return parseRespuesta(resp.choices[0].message.content)
 }
 
-// Groq: texto extraído de PDF
 async function analyzeTextGroq(text) {
   const resp = await groq.chat.completions.create({
     model: TEXT_MODEL,
@@ -74,15 +88,6 @@ async function analyzeTextGroq(text) {
     max_tokens: 4096
   })
   return parseRespuesta(resp.choices[0].message.content)
-}
-
-// Gemini: fallback para PDFs escaneados (sin texto extraíble)
-async function analyzePdfGemini(fileBuffer, mimeType) {
-  console.log('[IA] PDF escaneado → usando Gemini como fallback')
-  const model    = genAI.getGenerativeModel({ model: GEMINI_MODEL })
-  const base64   = fileBuffer.toString('base64')
-  const result   = await model.generateContent([{ inlineData: { mimeType, data: base64 } }, PROMPT_BASE])
-  return parseRespuesta(result.response.text())
 }
 
 async function analyzeDocument(fileBuffer, mimeType) {
@@ -100,12 +105,14 @@ async function analyzeDocument(fileBuffer, mimeType) {
       console.log('[IA] pdf-parse error:', e.message)
     }
 
-    // 2. PDF escaneado → Gemini (único que lo soporta nativamente gratis)
-    return await analyzePdfGemini(fileBuffer, mimeType)
+    // 2. PDF escaneado → convertir primera página a PNG → Groq Vision
+    console.log('[IA] PDF escaneado → convirtiendo a imagen → Groq Vision')
+    const pngBuffer = await pdfToPng(fileBuffer)
+    return await analyzeImageGroq(pngBuffer, 'image/png')
   }
 
   // ── Imágenes → Groq Vision ────────────────────────────────────────────────
-  console.log(`[IA] Imagen ${mimeType} → Groq visión`)
+  console.log(`[IA] Imagen ${mimeType} → Groq Vision`)
   return await analyzeImageGroq(fileBuffer, mimeType)
 }
 
