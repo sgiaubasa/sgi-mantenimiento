@@ -2,7 +2,7 @@ const mongoose = require('mongoose')
 const { Schema } = mongoose
 
 const RESPONSABLES = ['SUP','MAA','MAE','MAN','MVI','MED','ELE','JES','TG','PEX']
-const PERIODICIDADES = ['diario','semanal','quincenal','mensual','trimestral','semestral','anual']
+const PERIODICIDADES = ['diario','semanal','quincenal','mensual','bimestral','trimestral','semestral','anual']
 
 const itemPlanSchema = new Schema({
   estacion:          { type: String, required: true },
