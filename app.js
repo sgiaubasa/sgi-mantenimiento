@@ -1426,6 +1426,9 @@ async function loadRepositorio() {
           const evidenciaBtn = i.evidenciaNombre
             ? `<button class="btn-secondary btn-sm" onclick="verEvidencia('${i._id}')" title="${escHtml(i.evidenciaNombre)}">📎 Ver</button>`
             : `<span style="color:var(--text-secondary);font-size:12px">—</span>`
+          const editBtn = usuarioActual?.rol === 'admin'
+            ? `<button class="btn-icon-sm" style="color:var(--primary-color)" onclick="abrirModalEditarInsp('${i._id}')" title="Editar verificación">✏</button>`
+            : ''
           const elimBtn = usuarioActual?.rol === 'admin'
             ? `<button class="btn-icon-sm" style="color:var(--danger-color)" onclick="eliminarInspeccion('${i._id}')" title="Eliminar verificación">✕</button>`
             : ''
@@ -1435,7 +1438,7 @@ async function loadRepositorio() {
             <td style="white-space:nowrap">${tipo}</td>
             <td style="font-size:12px;color:var(--text-secondary)">${tareas || '—'}</td>
             <td style="text-align:center">${fallas}</td>
-            <td style="text-align:center;display:flex;gap:6px;justify-content:center;align-items:center">${evidenciaBtn}${elimBtn}</td>
+            <td style="text-align:center;display:flex;gap:6px;justify-content:center;align-items:center">${evidenciaBtn}${editBtn}${elimBtn}</td>
           </tr>`
         }).join('')}
       </tbody>
@@ -1454,6 +1457,121 @@ async function verEvidencia(id) {
     const url   = URL.createObjectURL(blob)
     window.open(url, '_blank')
   } catch { showNotification('Error al cargar evidencia.', 'error') }
+}
+
+// ─── Modal: Editar inspección (admin) ────────────────────────────────────────
+let _inspEditCache = null
+let _desvioEditCount = 0
+
+async function abrirModalEditarInsp(id) {
+  try {
+    // Buscar la inspección en la lista ya cargada (o hacer fetch)
+    const inspecciones = await apiFetch('/inspecciones')
+    const insp = inspecciones.find(i => i._id === id)
+    if (!insp) { showNotification('Inspección no encontrada.', 'error'); return }
+    _inspEditCache = insp
+    _desvioEditCount = 0
+
+    document.getElementById('ei-insp-id').value = id
+    document.getElementById('ei-estacion').value = insp.estacion || ''
+    document.getElementById('ei-fecha').value = insp.fecha
+      ? new Date(insp.fecha).toISOString().split('T')[0]
+      : new Date(insp.createdAt).toISOString().split('T')[0]
+    document.getElementById('ei-observaciones').value = insp.observacionesGenerales || ''
+    document.getElementById('ei-desvios-nuevos').innerHTML = ''
+
+    const tipo = insp.archivoNombre === 'Verificación manual' ? '✏ Manual' : '🤖 IA'
+    document.getElementById('ei-titulo-sub').textContent =
+      `${tipo} · ${insp.estacion} · ${new Date(insp.fecha || insp.createdAt).toLocaleDateString('es-AR')}`
+
+    // Mostrar desvíos ya existentes
+    const cont = document.getElementById('ei-desvios-existentes')
+    const devs = insp.desviosGenerados || []
+    if (!devs.length) {
+      cont.innerHTML = '<p style="font-size:12px;color:var(--text-secondary)">Sin desvíos registrados.</p>'
+    } else {
+      cont.innerHTML = devs.map(d =>
+        `<div style="padding:8px 12px;background:#FEF3C7;border-radius:8px;font-size:12px">
+          <strong>${escHtml(d.codigoEquipo || '')}</strong>
+          <span style="color:var(--text-secondary);margin-left:6px">Estado: ${d.estado}</span>
+        </div>`
+      ).join('')
+    }
+
+    document.getElementById('modal-editar-insp').style.display = 'flex'
+  } catch (err) { showNotification('Error: ' + err.message, 'error') }
+}
+
+function cerrarModalEditarInsp() {
+  document.getElementById('modal-editar-insp').style.display = 'none'
+  _inspEditCache = null
+}
+
+function agregarDesvioEdicionInsp() {
+  const idx  = _desvioEditCount++
+  const cont = document.getElementById('ei-desvios-nuevos')
+  const div  = document.createElement('div')
+  div.style.cssText = 'background:#F8FAFC;border:1px solid #E0E5F2;border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:8px'
+  div.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <span style="font-size:12px;font-weight:600;color:var(--text-secondary)">Nuevo desvío</span>
+      <button type="button" class="btn-icon-sm" style="color:var(--danger-color)" onclick="this.closest('div[data-idx]').remove()">✕</button>
+    </div>
+    <div class="form-row" style="gap:8px">
+      <input class="ei-dv-codigo" placeholder="Código equipo (ej: CC 03)" style="flex:1;font-size:13px;padding:7px 10px;border-radius:8px;border:1px solid #E0E5F2">
+      <input class="ei-dv-desc" placeholder="Descripción del equipo" style="flex:2;font-size:13px;padding:7px 10px;border-radius:8px;border:1px solid #E0E5F2">
+    </div>
+    <textarea class="ei-dv-obs" rows="2" placeholder="Descripción del desvío / falla observada" style="font-size:13px;padding:7px 10px;border-radius:8px;border:1px solid #E0E5F2;resize:vertical"></textarea>
+    <input class="ei-dv-accion" placeholder="Acción a implementar" style="font-size:13px;padding:7px 10px;border-radius:8px;border:1px solid #E0E5F2">
+    <div class="form-row" style="gap:8px">
+      <div class="form-group" style="flex:1;margin:0">
+        <label style="font-size:12px">Fecha estimada</label>
+        <input type="date" class="ei-dv-fecha" style="font-size:13px;padding:7px 10px;border-radius:8px;border:1px solid #E0E5F2;width:100%">
+      </div>
+    </div>`
+  div.setAttribute('data-idx', idx)
+  cont.appendChild(div)
+}
+
+async function guardarEdicionInsp() {
+  const id            = document.getElementById('ei-insp-id').value
+  const fecha         = document.getElementById('ei-fecha').value
+  const observaciones = document.getElementById('ei-observaciones').value.trim()
+
+  const desviosNuevos = []
+  for (const div of document.querySelectorAll('#ei-desvios-nuevos [data-idx]')) {
+    const codigo = div.querySelector('.ei-dv-codigo')?.value?.trim()
+    const desc   = div.querySelector('.ei-dv-desc')?.value?.trim()
+    const obs    = div.querySelector('.ei-dv-obs')?.value?.trim()
+    const accion = div.querySelector('.ei-dv-accion')?.value?.trim()
+    const fechaD = div.querySelector('.ei-dv-fecha')?.value
+    if (!obs || !accion || !fechaD) { showNotification('Completá todos los campos del desvío.', 'error'); return }
+    desviosNuevos.push({
+      codigoEquipo: codigo || _inspEditCache?.estacion || '',
+      descripcionEquipo: desc || '',
+      observacionFalla: obs,
+      descripcionDesvio: obs,
+      accionImplementar: accion,
+      fechaEstimadaEjecucion: fechaD
+    })
+  }
+
+  const btn = document.getElementById('ei-btn-guardar')
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando...' }
+  try {
+    await apiFetch(`/inspecciones/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ fecha, observacionesGenerales: observaciones, desviosNuevos })
+    })
+    const msgs = ['Verificación actualizada.']
+    if (desviosNuevos.length) msgs.push(`${desviosNuevos.length} desvío(s) agregado(s).`)
+    showNotification(msgs.join(' '), 'success')
+    cerrarModalEditarInsp()
+    loadRepositorio()
+    loadKpis()
+    loadCumplimiento()
+  } catch (err) { showNotification('Error: ' + err.message, 'error') }
+  finally { if (btn) { btn.disabled = false; btn.textContent = 'Guardar cambios' } }
 }
 
 async function eliminarInspeccion(id) {

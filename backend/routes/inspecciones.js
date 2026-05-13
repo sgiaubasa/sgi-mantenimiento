@@ -266,6 +266,46 @@ router.get('/kpis', authMW, async (req, res) => {
   }
 })
 
+// ─── PUT /:id ─── edición de inspección (solo admin) ─────────────────────────
+// Body: { fecha?, observacionesGenerales?, desviosNuevos[] }
+router.put('/:id', authMW, async (req, res) => {
+  if (req.usuario.rol !== 'admin') return res.status(403).json({ error: 'Solo administradores' })
+  try {
+    const insp = await Inspeccion.findById(req.params.id)
+    if (!insp) return res.status(404).json({ error: 'Inspección no encontrada' })
+
+    const { fecha, observacionesGenerales, desviosNuevos = [] } = req.body
+
+    if (fecha)                          insp.fecha = new Date(fecha)
+    if (observacionesGenerales !== undefined) insp.observacionesGenerales = observacionesGenerales || null
+
+    // Agregar nuevos desvíos
+    const idsNuevos = []
+    for (const d of desviosNuevos) {
+      const dev = await Desvio.create({
+        codigoEquipo:           d.codigoEquipo,
+        descripcionEquipo:      d.descripcionEquipo,
+        observacionFalla:       d.observacionFalla,
+        descripcionDesvio:      d.descripcionDesvio,
+        accionImplementar:      d.accionImplementar,
+        fechaEstimadaEjecucion: new Date(d.fechaEstimadaEjecucion),
+        estado:                 'Pendiente',
+        idInspeccionOrigen:     insp._id
+      })
+      idsNuevos.push(dev._id)
+    }
+    if (idsNuevos.length) {
+      insp.desviosGenerados = [...(insp.desviosGenerados || []), ...idsNuevos]
+      insp.tieneFallas = true
+    }
+
+    await insp.save()
+    res.json({ inspeccion: insp, desviosCreados: idsNuevos })
+  } catch (e) {
+    res.status(400).json({ error: e.message })
+  }
+})
+
 // ─── DELETE /:id ─────────────────────────────────────────────────────────────
 router.delete('/:id', authMW, async (req, res) => {
   if (req.usuario.rol !== 'admin') return res.status(403).json({ error: 'Solo administradores' })
