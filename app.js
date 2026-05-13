@@ -219,7 +219,7 @@ async function loadKpis(estacion = '', desde = '', hasta = '') {
     if (d.disponibilidad !== null && d.itemsTotal > 0) {
       setText('kpi-disponibilidad',     d.disponibilidad)
       setText('kpi-disponibilidad-sub', `${d.itemsConformes} conformes de ${d.itemsTotal} verificados`)
-      colorearTrend('kpi-disponibilidad', d.disponibilidad, 85)
+      colorearTrend('kpi-disponibilidad', d.disponibilidad, 95)
     }
 
     if (d.eficaciaDesvios !== null && d.desviosDetectadosMes > 0) {

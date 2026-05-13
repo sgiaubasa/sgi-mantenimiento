@@ -136,17 +136,29 @@ router.put('/:id', authMW, async (req, res) => {
     if (!itemActual) return res.status(404).json({ error: 'Item no encontrado' })
 
     if (periodicidad && aplicarDesde) {
-      // Versionar: cierra el actual y crea uno nuevo desde la fecha indicada
       const fechaDesde = new Date(aplicarDesde + 'T00:00:00')
+      const mesInicio  = fechaDesde.getMonth()
+
+      // Si el mes seleccionado coincide con el vigenciaDesde actual → actualizar en lugar de versionar
+      const vigDesdeActual = itemActual.vigenciaDesde ? new Date(itemActual.vigenciaDesde) : null
+      const mismoMes = vigDesdeActual &&
+        vigDesdeActual.getFullYear() === fechaDesde.getFullYear() &&
+        vigDesdeActual.getMonth()    === fechaDesde.getMonth()
+
+      if (mismoMes) {
+        itemActual.periodicidad = periodicidad
+        itemActual.mesInicio    = mesInicio
+        await itemActual.save()
+        return res.json(itemActual)
+      }
+
+      // Versionar: cierra el actual y crea uno nuevo desde la fecha indicada
       const fechaHasta = new Date(fechaDesde)
       fechaHasta.setDate(fechaHasta.getDate() - 1)
-
       itemActual.vigenciaHasta = fechaHasta
       await itemActual.save()
 
       const { _id, createdAt, updatedAt, __v, ...datosBase } = itemActual.toObject()
-      // mesInicio = mes real de inicio del nuevo período (para cálculos de bimestral/trimestral/etc.)
-      const mesInicio = fechaDesde.getMonth()
       const nuevoItem = await ItemPlan.create({ ...datosBase, periodicidad, mesInicio, vigenciaDesde: fechaDesde, vigenciaHasta: null })
       return res.status(201).json(nuevoItem)
     }
