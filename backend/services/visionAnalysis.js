@@ -7,7 +7,7 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
 
 const VISION_MODEL = 'meta-llama/llama-4-scout-17b-16e-instruct'
 const TEXT_MODEL   = 'llama-3.3-70b-versatile'
-const GEMINI_MODEL = 'gemini-1.5-flash'
+const GEMINI_MODEL = 'gemini-2.0-flash'
 
 const PROMPT_BASE = `Sos un sistema de análisis de registros de mantenimiento preventivo para AUBASA (Autopistas de Buenos Aires S.A.).
 
