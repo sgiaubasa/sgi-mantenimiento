@@ -1,6 +1,12 @@
 const router = require('express').Router()
 const Desvio = require('../models/Desvio')
 
+function parseDate(str) {
+  if (!str) return null
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return new Date(str + 'T12:00:00')
+  return new Date(str)
+}
+
 // ─── GET /pendientes ─────────────────────────────────────────────────────────
 router.get('/pendientes', async (req, res) => {
   try {
@@ -65,7 +71,7 @@ router.put('/:id', authMW, async (req, res) => {
     if (observacionFalla       !== undefined) desvio.observacionFalla       = observacionFalla
     if (descripcionDesvio      !== undefined) desvio.descripcionDesvio      = descripcionDesvio
     if (accionImplementar      !== undefined) desvio.accionImplementar      = accionImplementar
-    if (fechaEstimadaEjecucion !== undefined) desvio.fechaEstimadaEjecucion = new Date(fechaEstimadaEjecucion)
+    if (fechaEstimadaEjecucion !== undefined) desvio.fechaEstimadaEjecucion = parseDate(fechaEstimadaEjecucion)
 
     await desvio.save()
     res.json(desvio)
@@ -98,7 +104,7 @@ router.put('/:id/cerrar', async (req, res) => {
     if (!eficacia)                 return res.status(400).json({ error: 'La eficacia es requerida' })
 
     desvio.estado         = 'Cerrado'
-    desvio.fechaRealCierre = fechaRealCierre ? new Date(fechaRealCierre) : new Date()
+    desvio.fechaRealCierre = fechaRealCierre ? parseDate(fechaRealCierre) : new Date()
     desvio.eficacia       = eficacia
     desvio.motivoCierre   = 'manual'
     await desvio.save()

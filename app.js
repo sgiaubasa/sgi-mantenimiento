@@ -373,14 +373,14 @@ async function loadHistorialDesvios() {
         ${usuarioActual?.rol === 'admin' ? '<th></th>' : ''}
       </tr></thead>
       <tbody>${desvios.map(d => {
-        const fecha  = new Date(d.createdAt).toLocaleDateString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric' })
+        const fecha  = formatDate(d.createdAt)
         const est    = d.idInspeccionOrigen?.estacion || '—'
         const equipo = [d.codigoEquipo, d.descripcionEquipo].filter(Boolean).join(' · ')
         const badge  = d.estado === 'Cerrado'
           ? `<span style="background:#DCFCE7;color:#16A34A;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600">Cerrado</span>`
           : `<span style="background:#FEF3C7;color:#D97706;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600">Pendiente</span>`
         const cierre = d.fechaRealCierre
-          ? new Date(d.fechaRealCierre).toLocaleDateString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric' }) + (d.eficacia ? ` — ${d.eficacia}` : '')
+          ? formatDate(d.fechaRealCierre) + (d.eficacia ? ` — ${d.eficacia}` : '')
           : '—'
         const adminBtns = usuarioActual?.rol === 'admin'
           ? `<button class="btn-icon-sm" style="color:var(--primary-color)" onclick='abrirModalEditarDesvio(${JSON.stringify(d)})' title="Editar desvío">✏</button>
@@ -1479,7 +1479,7 @@ async function loadRepositorio() {
       </thead>
       <tbody>
         ${filtradas.map(i => {
-          const fecha = new Date(i.fecha || i.createdAt).toLocaleDateString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric' })
+          const fecha = formatDate(i.fecha || i.createdAt)
           const tipo  = i.archivoNombre === 'Verificación manual' ? '✏ Manual' : '🤖 IA'
           const fallas = i.tieneFallas
             ? `<span style="color:var(--danger-color);font-weight:600">Sí (${(i.desviosGenerados||[]).length})</span>`
@@ -1544,7 +1544,7 @@ async function abrirModalEditarInsp(id) {
 
     const tipo = insp.archivoNombre === 'Verificación manual' ? '✏ Manual' : '🤖 IA'
     document.getElementById('ei-titulo-sub').textContent =
-      `${tipo} · ${insp.estacion} · ${new Date(insp.fecha || insp.createdAt).toLocaleDateString('es-AR')}`
+      `${tipo} · ${insp.estacion} · ${formatDate(insp.fecha || insp.createdAt)}`
 
     // Mostrar desvíos ya existentes
     const cont = document.getElementById('ei-desvios-existentes')
@@ -1648,9 +1648,10 @@ async function eliminarInspeccion(id) {
 }
 
 // ─── Utilidades ───────────────────────────────────────────────────────────────
+const _TZ = { timeZone: 'America/Argentina/Buenos_Aires', day: '2-digit', month: '2-digit', year: 'numeric' }
 function formatDate(dateStr) {
   if (!dateStr) return '—'
-  try { return new Date(dateStr).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }) }
+  try { return new Date(dateStr).toLocaleDateString('es-AR', _TZ) }
   catch { return dateStr }
 }
 function escHtml(str) { return (str || '').replace(/'/g, "\\'").replace(/"/g, '&quot;') }

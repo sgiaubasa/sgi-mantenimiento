@@ -8,6 +8,13 @@ const { analyzeDocument } = require('../services/visionAnalysis')
 
 const TIPOS_PERMITIDOS = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/gif']
 
+// Parsea fechas YYYY-MM-DD como mediodía para evitar el desfase UTC-3
+function parseDate(str) {
+  if (!str) return null
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return new Date(str + 'T12:00:00')
+  return new Date(str)
+}
+
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 },
@@ -86,7 +93,7 @@ router.post('/', authMW, upload.fields([{ name: 'archivo', maxCount: 1 }, { name
     const insp = new Inspeccion({
       estacion:              analisis.estacion || estacion || 'No especificada',
       operador:              analisis.operador  || null,
-      fecha:                 analisis.fecha ? new Date(analisis.fecha) : new Date(),
+      fecha:                 analisis.fecha ? parseDate(analisis.fecha) : new Date(),
       archivoNombre:         archivoIA.originalname,
       archivoMimeType:       archivoIA.mimetype,
       equipos:               analisis.equipos || [],
@@ -108,7 +115,7 @@ router.post('/', authMW, upload.fields([{ name: 'archivo', maxCount: 1 }, { name
         observacionFalla:       d.observacionFalla,
         descripcionDesvio:      d.descripcionDesvio,
         accionImplementar:      d.accionImplementar,
-        fechaEstimadaEjecucion: new Date(d.fechaEstimadaEjecucion),
+        fechaEstimadaEjecucion: parseDate(d.fechaEstimadaEjecucion),
         estado:                 'Pendiente',
         idInspeccionOrigen:     insp._id
       })
@@ -173,7 +180,7 @@ router.post('/manual', authMW, upload.single('evidencia'), async (req, res) => {
 
     const insp = await Inspeccion.create({
       estacion:              item.estacion,
-      fecha:                 fecha ? new Date(fecha) : new Date(),
+      fecha:                 fecha ? parseDate(fecha) : new Date(),
       archivoNombre:         'Verificación manual',
       equipos,
       tieneFallas,
@@ -195,7 +202,7 @@ router.post('/manual', authMW, upload.single('evidencia'), async (req, res) => {
         observacionFalla:       d.observacionFalla,
         descripcionDesvio:      d.descripcionDesvio,
         accionImplementar:      d.accionImplementar,
-        fechaEstimadaEjecucion: new Date(d.fechaEstimadaEjecucion),
+        fechaEstimadaEjecucion: parseDate(d.fechaEstimadaEjecucion),
         estado:                 'Pendiente',
         idInspeccionOrigen:     insp._id
       })
@@ -276,7 +283,7 @@ router.put('/:id', authMW, async (req, res) => {
 
     const { fecha, observacionesGenerales, desviosNuevos = [] } = req.body
 
-    if (fecha)                          insp.fecha = new Date(fecha)
+    if (fecha)                          insp.fecha = parseDate(fecha)
     if (observacionesGenerales !== undefined) insp.observacionesGenerales = observacionesGenerales || null
 
     // Agregar nuevos desvíos
@@ -288,7 +295,7 @@ router.put('/:id', authMW, async (req, res) => {
         observacionFalla:       d.observacionFalla,
         descripcionDesvio:      d.descripcionDesvio,
         accionImplementar:      d.accionImplementar,
-        fechaEstimadaEjecucion: new Date(d.fechaEstimadaEjecucion),
+        fechaEstimadaEjecucion: parseDate(d.fechaEstimadaEjecucion),
         estado:                 'Pendiente',
         idInspeccionOrigen:     insp._id
       })
