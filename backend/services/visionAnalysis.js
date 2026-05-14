@@ -8,7 +8,7 @@ const TEXT_MODEL   = 'llama-3.3-70b-versatile'
 
 const PROMPT_BASE = `Sos un sistema de análisis de registros de mantenimiento preventivo para AUBASA (Autopistas de Buenos Aires S.A.).
 
-Analizá el contenido. Puede ser un Registro Genérico (Anexo 3.6), planilla de control de campo, o similar.
+Analizá el contenido. Puede ser un Registro Genérico de verificación, planilla de control de campo, o similar.
 El documento puede tener una tabla con filas de equipos (ej: CC 01, CC 02, AA-01) y columnas de ítems a verificar (ej: Puertas, Ventanas, Luminarias, Limpieza exterior).
 
 Devolvé ÚNICAMENTE un JSON válido sin texto adicional ni bloques markdown, con este formato exacto:

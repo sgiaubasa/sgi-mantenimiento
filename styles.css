@@ -105,7 +105,63 @@ body {
     font-weight: 600;
 }
 
-/* Main Content */
+/* ── LOGIN ───────────────────────────────────────────────────────────────── */
+.login-container {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #1B2559 0%, #4318FF 60%, #868CFF 100%);
+    padding: 24px;
+}
+
+.login-card {
+    background: #FFFFFF;
+    border-radius: 24px;
+    padding: 48px 40px;
+    width: 100%;
+    max-width: 420px;
+    box-shadow: 0 32px 80px rgba(27, 37, 89, 0.25);
+}
+
+.login-logo {
+    text-align: center;
+    margin-bottom: 36px;
+}
+
+.login-logo .logo-icon {
+    margin: 0 auto 16px;
+    width: 64px;
+    height: 64px;
+    font-size: 28px;
+    border-radius: 18px;
+}
+
+.login-logo h1 {
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: -0.5px;
+    margin-bottom: 6px;
+}
+
+.login-logo p {
+    font-size: 14px;
+    color: var(--text-secondary);
+    font-weight: 400;
+}
+
+.login-error {
+    background: var(--danger-light);
+    color: var(--danger-color);
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 13px;
+    font-weight: 500;
+    margin-bottom: 8px;
+}
+
+/* ── Main Content */
 .main-content {
     flex: 1;
     padding: 40px;

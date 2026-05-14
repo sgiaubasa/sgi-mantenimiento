@@ -145,7 +145,7 @@ const viewMeta = {
   },
   'view-mantenimiento': {
     title: 'Plan de Mantenimiento Preventivo',
-    subtitle: 'Análisis automático con IA · Gestión de desvíos (Anexo 3.3)',
+    subtitle: 'Análisis automático con IA · Gestión de desvíos',
     onEnter: () => { loadKpis(); loadCumplimiento() }
   },
   'view-repositorio': {
@@ -514,7 +514,7 @@ if (fileInput) {
   })
 }
 function resetFileVisual() {
-  if (fileVisualText) { fileVisualText.textContent = 'Subir PDF o imagen del Anexo 3.6'; fileVisualText.style.color = 'var(--primary-color)' }
+  if (fileVisualText) { fileVisualText.textContent = 'Subir PDF o imagen del Registro Genérico'; fileVisualText.style.color = 'var(--primary-color)' }
 }
 
 // ─── PASO 1: Análisis con IA ──────────────────────────────────────────────────
