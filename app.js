@@ -532,11 +532,20 @@ function resetFileVisual() {
 document.getElementById('analizar-form')?.addEventListener('submit', async e => {
   e.preventDefault()
   if (!currentFiles.length) { showNotification('Seleccioná al menos un archivo PDF o imagen.', 'error'); return }
+  // Estación requerida si la IA no la detecta (la pedimos antes de enviar)
+  const estacionSelect = document.getElementById('estacion-manual')
+  if (!estacionSelect.value) {
+    showNotification('Seleccioná la estación antes de analizar para que el resultado se vincule al plan.', 'warning')
+    estacionSelect.focus()
+    return
+  }
   setBtnLoading(true)
   const fd = new FormData()
   currentFiles.forEach(f => fd.append('archivos', f))
   try {
     const { analisis, desviosCierrePosible: desvios } = await apiFormFetch('/inspecciones/analizar', fd)
+    // Si la IA no detectó estación, usamos la seleccionada manualmente
+    if (!analisis.estacion) analisis.estacion = estacionSelect.value
     analisisActual       = analisis
     desviosCierrePosible = desvios || []
     desviosSeleccionados = new Set()
@@ -602,14 +611,15 @@ function mostrarResultados() {
     panelAuto.style.display = 'none'
   }
 
+  desviosExtras = 0
   const panelDesvios = document.getElementById('panel-desvios-nuevos')
-  if (fallas.length > 0) {
-    panelDesvios.style.display = 'block'
-    document.getElementById('desvios-nuevos-container').innerHTML = fallas.map((eq, i) => renderDesvioForm(eq, i)).join('')
-    document.querySelectorAll('.desvio-field').forEach(el => el.addEventListener('input', checkConfirmarEnabled))
-  } else {
-    panelDesvios.style.display = 'none'
-  }
+  panelDesvios.style.display = 'block'
+  const alertaFallas = document.getElementById('alerta-fallas-ia')
+  if (alertaFallas) alertaFallas.style.display = fallas.length > 0 ? 'flex' : 'none'
+  document.getElementById('desvios-nuevos-container').innerHTML = fallas.map((eq, i) => renderDesvioForm(eq, i)).join('')
+  document.querySelectorAll('.desvio-field').forEach(el => el.addEventListener('input', checkConfirmarEnabled))
+  const btnAgregar = document.getElementById('btn-agregar-desvio-extra')
+  if (btnAgregar) btnAgregar.style.display = 'inline-flex'
 
   document.getElementById('panel-upload').style.display     = 'none'
   document.getElementById('panel-resultados').style.display = 'block'
@@ -655,16 +665,74 @@ function renderDesvioForm(eq, i) {
   </div>`
 }
 
+let desviosExtras = 0
+
+function agregarDesvioExtra() {
+  desviosExtras++
+  const i = `x${desviosExtras}`
+  const container = document.getElementById('desvios-nuevos-container')
+  const div = document.createElement('div')
+  div.id = `desvio-extra-${i}`
+  div.innerHTML = renderDesvioFormExtra(i)
+  container.appendChild(div)
+  div.querySelectorAll('.desvio-field').forEach(el => el.addEventListener('input', checkConfirmarEnabled))
+}
+
+function renderDesvioFormExtra(i) {
+  return `<div class="desvio-form-card" style="border-left:3px solid var(--warning-color)">
+    <div class="desvio-form-title" style="justify-content:space-between">
+      <span>⚠ Desvío adicional</span>
+      <button type="button" onclick="document.getElementById('desvio-extra-${i}').remove(); desviosExtras--; checkConfirmarEnabled()"
+        style="background:none;border:none;cursor:pointer;color:var(--danger-color);font-size:18px">✕</button>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Código del equipo</label>
+        <input class="desvio-field" id="desvio-codigo-${i}" type="text" placeholder="Ej: CC 03">
+      </div>
+      <div class="form-group">
+        <label>Descripción del equipo</label>
+        <input class="desvio-field" id="desvio-equipo-${i}" type="text" placeholder="Ej: Cabina de Cobro 3">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Descripción del desvío *</label>
+        <textarea class="desvio-field" id="desvio-desc-${i}" rows="2" required placeholder="Describí el problema..."></textarea>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Acción a implementar *</label>
+        <input class="desvio-field" id="desvio-accion-${i}" type="text" required placeholder="Acción correctiva">
+      </div>
+      <div class="form-group">
+        <label>Fecha estimada *</label>
+        <input class="desvio-field" id="desvio-fecha-${i}" type="date" required>
+      </div>
+    </div>
+  </div>`
+}
+
 function checkConfirmarEnabled() {
   const fallas = (analisisActual?.equipos || []).filter(e => e.estado === 'falla')
-  const ok = fallas.every((_, i) => {
+  const okFallas = fallas.every((_, i) => {
     const desc   = document.getElementById(`desvio-desc-${i}`)?.value?.trim()
     const accion = document.getElementById(`desvio-accion-${i}`)?.value?.trim()
     const fecha  = document.getElementById(`desvio-fecha-${i}`)?.value
     return desc && accion && fecha
   })
+  // Validar extras (desc y accion requeridos)
+  const okExtras = Array.from({ length: desviosExtras }, (_, k) => {
+    const i = `x${k + 1}`
+    if (!document.getElementById(`desvio-extra-${i}`)) return true // fue eliminado
+    const desc   = document.getElementById(`desvio-desc-${i}`)?.value?.trim()
+    const accion = document.getElementById(`desvio-accion-${i}`)?.value?.trim()
+    const fecha  = document.getElementById(`desvio-fecha-${i}`)?.value
+    return desc && accion && fecha
+  }).every(Boolean)
   const btn = document.getElementById('btn-confirmar-guardar')
-  if (btn) btn.disabled = !ok
+  if (btn) btn.disabled = !(okFallas && okExtras)
 }
 
 function toggleAutoclose(id, checked) {
@@ -683,6 +751,24 @@ document.getElementById('btn-confirmar-guardar')?.addEventListener('click', asyn
     accionImplementar:      document.getElementById(`desvio-accion-${i}`).value,
     fechaEstimadaEjecucion: document.getElementById(`desvio-fecha-${i}`).value
   }))
+  // Agregar desvíos manuales extra
+  for (let k = 1; k <= desviosExtras; k++) {
+    const i = `x${k}`
+    if (!document.getElementById(`desvio-extra-${i}`)) continue
+    const desc   = document.getElementById(`desvio-desc-${i}`)?.value?.trim()
+    const accion = document.getElementById(`desvio-accion-${i}`)?.value?.trim()
+    const fecha  = document.getElementById(`desvio-fecha-${i}`)?.value
+    if (desc && accion && fecha) {
+      desviosNuevos.push({
+        codigoEquipo:           document.getElementById(`desvio-codigo-${i}`)?.value?.trim() || '',
+        descripcionEquipo:      document.getElementById(`desvio-equipo-${i}`)?.value?.trim() || '',
+        observacionFalla:       '',
+        descripcionDesvio:      desc,
+        accionImplementar:      accion,
+        fechaEstimadaEjecucion: fecha
+      })
+    }
+  }
 
   const tipoVerif = document.getElementById('tipo-verificacion')?.value || 'Personal AUBASA'
   const nomProv   = document.getElementById('nombre-proveedor')?.value  || ''
