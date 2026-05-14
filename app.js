@@ -221,12 +221,22 @@ async function loadKpis(estacion = '', desde = '', hasta = '') {
       setText('kpi-disponibilidad',     d.disponibilidad + '%')
       setText('kpi-disponibilidad-sub', `${d.itemsConformes} conformes de ${d.itemsTotal} verificados`)
       colorearTrend('kpi-disponibilidad', d.disponibilidad, 95)
+    } else {
+      setText('kpi-disponibilidad',     '—')
+      setText('kpi-disponibilidad-sub', 'Sin verificaciones en el período')
+      const el = document.getElementById('kpi-disponibilidad')
+      if (el) el.style.color = 'var(--text-secondary)'
     }
 
     if (d.eficaciaDesvios !== null && d.desviosDetectadosMes > 0) {
       setText('kpi-eficacia',     d.eficaciaDesvios + '%')
       setText('kpi-eficacia-sub', `${d.cerradosMes} cerrados de ${d.desviosDetectadosMes} detectados`)
       colorearTrend('kpi-eficacia', d.eficaciaDesvios, 75)
+    } else {
+      setText('kpi-eficacia',     '—')
+      setText('kpi-eficacia-sub', 'Sin desvíos en el período')
+      const el = document.getElementById('kpi-eficacia')
+      if (el) el.style.color = 'var(--text-secondary)'
     }
 
     const sub = document.getElementById('kpi-resumen-total-sub')

@@ -268,9 +268,13 @@ router.get('/kpis', authMW, async (req, res) => {
     const hastaBase = parseMes(hastaParam, new Date(now.getFullYear(), now.getMonth(), 1))
     const hasta = new Date(hastaBase.getFullYear(), hastaBase.getMonth() + 1, 1)
 
-    const filtroFecha = { createdAt: { $gte: desde, $lt: hasta } }
-    const filtroInsp  = estacion ? { ...filtroFecha, estacion } : { ...filtroFecha }
-    const filtroFechaInsp = { ...filtroFecha }
+    // Filtro por FECHA de verificación (campo fecha), no por fecha de carga
+    const filtroFechaInsp = { fecha: { $gte: desde, $lt: hasta } }
+    const filtroInsp = estacion
+      ? { ...filtroFechaInsp, estacion }
+      : { ...filtroFechaInsp }
+    // Desvíos: usar createdAt (no tienen campo fecha de verificación)
+    const filtroFechaDesvio = { createdAt: { $gte: desde, $lt: hasta } }
 
     const [totalMes, conFallasMes, pendientes, cerradosMes, inspeccionesMes, desviosDetectadosMes] = await Promise.all([
       Inspeccion.countDocuments(filtroInsp),
@@ -278,7 +282,7 @@ router.get('/kpis', authMW, async (req, res) => {
       Desvio.countDocuments({ estado: 'Pendiente' }),
       Desvio.countDocuments({ estado: 'Cerrado', updatedAt: { $gte: desde, $lt: hasta } }),
       Inspeccion.find(filtroInsp).select('equipos').lean(),
-      Desvio.countDocuments(filtroFechaInsp)
+      Desvio.countDocuments(filtroFechaDesvio)
     ])
 
     // Indicador de Disponibilidad: ítems conformes / total ítems verificados
