@@ -778,6 +778,7 @@ document.getElementById('btn-confirmar-guardar')?.addEventListener('click', asyn
   fd.append('datos', JSON.stringify({
     analisis:         analisisActual,
     estacion:         document.getElementById('estacion-manual').value,
+    planItemId:       document.getElementById('ia-item-plan')?.value || null,
     tipoVerificacion: tipoVerif,
     proveedorExterno: tipoVerif === 'Proveedor Externo' ? nomProv : null,
     desviosNuevos,
@@ -808,6 +809,8 @@ function resetFlujoAnalisis() {
   document.getElementById('analizar-form')?.reset()
   document.getElementById('tipo-verificacion').value = 'Personal AUBASA'
   document.getElementById('grupo-proveedor').style.display = 'none'
+  const iaSel = document.getElementById('ia-item-plan')
+  if (iaSel) iaSel.innerHTML = '<option value="">— Primero elegí la estación —</option>'
   resetFileVisual()
   document.getElementById('panel-upload').style.display     = 'block'
   document.getElementById('panel-resultados').style.display = 'none'
@@ -1589,8 +1592,9 @@ async function loadRepositorio() {
             ? `<span style="color:var(--danger-color);font-weight:600">Sí (${(i.desviosGenerados||[]).length})</span>`
             : `<span style="color:var(--success-color)">No</span>`
           const tareas = (i.tareasVerificadas || []).slice(0, 3).join(', ') + (i.tareasVerificadas?.length > 3 ? '…' : '')
-          const evidenciaBtn = i.evidenciaNombre
-            ? `<button class="btn-secondary btn-sm" onclick="verEvidencia('${i._id}')" title="${escHtml(i.evidenciaNombre)}">📎 Ver</button>`
+          const evCount = i.evidencias?.length || (i.evidenciaNombre ? 1 : 0)
+          const evidenciaBtn = evCount > 0
+            ? `<button class="btn-secondary btn-sm" onclick="verEvidencia('${i._id}',${evCount})" title="${escHtml(i.evidenciaNombre||'')}">📎 Ver${evCount > 1 ? ` (${evCount})` : ''}</button>`
             : `<span style="color:var(--text-secondary);font-size:12px">—</span>`
           const editBtn = usuarioActual?.rol === 'admin'
             ? `<button class="btn-icon-sm" style="color:var(--primary-color)" onclick="abrirModalEditarInsp('${i._id}')" title="Editar verificación">✏</button>`
@@ -1614,14 +1618,17 @@ async function loadRepositorio() {
   }
 }
 
-async function verEvidencia(id) {
+async function verEvidencia(id, count) {
   try {
     const token = localStorage.getItem('sgi_token')
-    const res   = await fetch(`/api/inspecciones/${id}/evidencia`, { headers: { Authorization: `Bearer ${token}` } })
-    if (!res.ok) { showNotification('Esta verificación no tiene evidencia adjunta.', 'error'); return }
-    const blob  = await res.blob()
-    const url   = URL.createObjectURL(blob)
-    window.open(url, '_blank')
+    const total = count || 1
+    for (let idx = 0; idx < total; idx++) {
+      const res = await fetch(`/api/inspecciones/${id}/evidencia?idx=${idx}`, { headers: { Authorization: `Bearer ${token}` } })
+      if (!res.ok) { if (idx === 0) showNotification('Esta verificación no tiene evidencia adjunta.', 'error'); break }
+      const blob = await res.blob()
+      const url  = URL.createObjectURL(blob)
+      window.open(url, '_blank')
+    }
   } catch { showNotification('Error al cargar evidencia.', 'error') }
 }
 

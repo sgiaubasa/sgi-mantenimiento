@@ -51,41 +51,46 @@ router.get('/cumplimiento', authMW, async (req, res) => {
     const filtroInsp = { createdAt: { $gte: desde, $lt: hasta } }
     if (estacion) filtroInsp.estacion = estacion
     const inspecciones = await Inspeccion.find(filtroInsp)
-      .select('createdAt equipos tareasVerificadas fecha')
+      .select('createdAt equipos tareasVerificadas fecha planItemId')
       .lean()
 
-    // ejecutadoPorMesPrefix[mes][prefix] = suma de ítems verificados (unidades × tareas)
-    const ejecutadoPorMesPrefix = {}
-    const ejecutadoPorMes = {}
+    // Dos mapas: por planItemId (directo) y por prefix (legacy/prefijo)
+    const ejecutadoPorItemId  = {}  // [mes][planItemId] = suma ítems
+    const ejecutadoPorPrefix  = {}  // [mes][PREFIX] = suma ítems
+    const ejecutadoPorMes     = {}  // [mes] = suma ítems (sin prefix)
+
     for (const insp of inspecciones) {
-      const fechaRef = insp.fecha || insp.createdAt
-      const mes = MESES[new Date(fechaRef).getMonth()]
+      const fechaRef    = insp.fecha || insp.createdAt
+      const mes         = MESES[new Date(fechaRef).getMonth()]
       const tareasCount = Math.max((insp.tareasVerificadas || []).length, 1)
 
-      if (!ejecutadoPorMesPrefix[mes]) ejecutadoPorMesPrefix[mes] = {}
-
-      // Agrupar equipos por prefijo y contar unidades
-      const unidadesPorPrefix = {}
-      for (const eq of (insp.equipos || [])) {
-        const prefix = (eq.codigo || '').replace(/[-\s\d].*/, '').toUpperCase()
-        if (prefix) unidadesPorPrefix[prefix] = (unidadesPorPrefix[prefix] || 0) + 1
+      if (insp.planItemId) {
+        // Conteo directo por planItemId — usa cantidad real de equipos verificados
+        if (!ejecutadoPorItemId[mes]) ejecutadoPorItemId[mes] = {}
+        const pid   = insp.planItemId.toString()
+        const units = Math.max((insp.equipos || []).length, 1)
+        ejecutadoPorItemId[mes][pid] = (ejecutadoPorItemId[mes][pid] || 0) + (units * tareasCount)
+      } else {
+        // Conteo por prefijo (inspecciones anteriores o manuales)
+        if (!ejecutadoPorPrefix[mes]) ejecutadoPorPrefix[mes] = {}
+        const unidadesPorPrefix = {}
+        for (const eq of (insp.equipos || [])) {
+          const prefix = (eq.codigo || '').replace(/[-\s\d].*/, '').toUpperCase()
+          if (prefix) unidadesPorPrefix[prefix] = (unidadesPorPrefix[prefix] || 0) + 1
+        }
+        for (const [prefix, unidades] of Object.entries(unidadesPorPrefix)) {
+          ejecutadoPorPrefix[mes][prefix] = (ejecutadoPorPrefix[mes][prefix] || 0) + (unidades * tareasCount)
+        }
+        ejecutadoPorMes[mes] = (ejecutadoPorMes[mes] || 0) + tareasCount
       }
-
-      for (const [prefix, unidades] of Object.entries(unidadesPorPrefix)) {
-        ejecutadoPorMesPrefix[mes][prefix] = (ejecutadoPorMesPrefix[mes][prefix] || 0) + (unidades * tareasCount)
-      }
-      // Fallback para ítems sin codigoPrefix: suma tareasCount por inspección
-      ejecutadoPorMes[mes] = (ejecutadoPorMes[mes] || 0) + tareasCount
     }
 
-    // planificado = frecuencia × cantUnidades × cantTareas
-    // Solo se cuentan ítems que tienen tareas configuradas (ítems sin tareas = datos de prueba)
     const resultado = MESES.map((mes, mesIdx) => {
       const primerDia = new Date(anio, mesIdx, 1)
       const ultimoDia = new Date(anio, mesIdx + 1, 0)
 
       const itemsMes = items.filter(item => {
-        if (!(item.tareas?.length)) return false   // ignora ítems sin tareas (datos anteriores)
+        if (!(item.tareas?.length)) return false
         const vigDesde = item.vigenciaDesde ? new Date(item.vigenciaDesde) : new Date(anio, 0, 1)
         const vigHasta = item.vigenciaHasta ? new Date(item.vigenciaHasta) : null
         return vigDesde <= ultimoDia && (vigHasta === null || vigHasta >= primerDia)
@@ -98,11 +103,14 @@ router.get('/cumplimiento', authMW, async (req, res) => {
         const cantUnidades = item.unidades?.length || 1
         const cantTareas   = item.tareas.length
         planificado += frec * cantUnidades * cantTareas
-        if (item.codigoPrefix) {
-          ejecutado += ejecutadoPorMesPrefix[mes]?.[item.codigoPrefix.toUpperCase()] || 0
-        } else {
-          ejecutado += ejecutadoPorMes[mes] || 0
-        }
+
+        // Primero: coincidencia directa por planItemId (inspecciones nuevas)
+        const byId = ejecutadoPorItemId[mes]?.[item._id.toString()] || 0
+        // Segundo: coincidencia por prefijo (inspecciones sin planItemId)
+        const byPrefix = item.codigoPrefix
+          ? (ejecutadoPorPrefix[mes]?.[item.codigoPrefix.toUpperCase()] || 0)
+          : (ejecutadoPorMes[mes] || 0)
+        ejecutado += byId + byPrefix
       }
       return { mes, planificado, ejecutado, porcentaje: planificado > 0 ? Math.round((ejecutado / planificado) * 100) : null }
     })

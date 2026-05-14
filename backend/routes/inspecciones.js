@@ -106,7 +106,7 @@ router.post('/', authMW, upload.fields([{ name: 'archivos', maxCount: 10 }, { na
     return res.status(400).json({ error: 'El campo "datos" no es JSON válido' })
   }
 
-  const { analisis, estacion, desviosNuevos = [], desviosCerrar = [] } = body
+  const { analisis, estacion, planItemId, desviosNuevos = [], desviosCerrar = [] } = body
 
   if (!analisis) return res.status(400).json({ error: 'Faltan datos del análisis de IA' })
 
@@ -118,13 +118,15 @@ router.post('/', authMW, upload.fields([{ name: 'archivos', maxCount: 10 }, { na
     })
   }
 
-  // La evidencia es el archivo extra si existe, sino el documento IA
-  const evArchivo = archivoEv || archivoIA
+  // Evidencias: todas las imágenes subidas + eventual archivo extra
+  const evArchivo  = archivoEv || archivoIA
+  const evidencias = archivosIA.map(f => ({ nombre: f.originalname, mimeType: f.mimetype, data: f.buffer }))
 
   try {
     // 1. Guardar inspección
     const insp = new Inspeccion({
-      estacion:              analisis.estacion || estacion || 'No especificada',
+      estacion:              estacion || analisis.estacion || 'No especificada',
+      planItemId:            planItemId || null,
       operador:              analisis.operador  || null,
       fecha:                 analisis.fecha ? parseDate(analisis.fecha) : new Date(),
       archivoNombre:         archivoIA.originalname,
@@ -135,7 +137,8 @@ router.post('/', authMW, upload.fields([{ name: 'archivos', maxCount: 10 }, { na
       observacionesGenerales: analisis.observacionesGenerales || null,
       evidenciaNombre:       evArchivo.originalname,
       evidenciaMimeType:     evArchivo.mimetype,
-      evidenciaData:         evArchivo.buffer
+      evidenciaData:         evArchivo.buffer,
+      evidencias
     })
     await insp.save()
 
@@ -362,8 +365,20 @@ router.delete('/:id', authMW, async (req, res) => {
 router.get('/:id/evidencia', authMW, async (req, res) => {
   try {
     const insp = await Inspeccion.findById(req.params.id)
-      .select('evidenciaData evidenciaMimeType evidenciaNombre')
-    if (!insp?.evidenciaData) return res.status(404).json({ error: 'Sin evidencia registrada' })
+      .select('evidenciaData evidenciaMimeType evidenciaNombre evidencias')
+    if (!insp) return res.status(404).json({ error: 'Inspección no encontrada' })
+
+    const idx = parseInt(req.query.idx) || 0
+    // Si hay array de evidencias y se pide un índice válido, servir desde ahí
+    if (insp.evidencias?.length > 0) {
+      const ev = insp.evidencias[idx] || insp.evidencias[0]
+      if (!ev?.data) return res.status(404).json({ error: 'Sin evidencia' })
+      res.set('Content-Type', ev.mimeType)
+      res.set('Content-Disposition', `inline; filename="${encodeURIComponent(ev.nombre)}"`)
+      return res.send(ev.data)
+    }
+    // Fallback: compatibilidad con inspecciones antiguas
+    if (!insp.evidenciaData) return res.status(404).json({ error: 'Sin evidencia registrada' })
     res.set('Content-Type', insp.evidenciaMimeType)
     res.set('Content-Disposition', `inline; filename="${encodeURIComponent(insp.evidenciaNombre)}"`)
     res.send(insp.evidenciaData)
@@ -378,7 +393,7 @@ router.get('/', async (req, res) => {
     const inspecciones = await Inspeccion.find()
       .sort({ createdAt: -1 })
       .limit(50)
-      .select('-evidenciaData')
+      .select('-evidenciaData -evidencias.data')
       .populate('desviosGenerados', 'estado codigoEquipo')
     res.json(inspecciones)
   } catch (e) {

@@ -8,15 +8,22 @@ const equipoSchema = new Schema({
   observacion: String
 }, { _id: false })
 
+const evidenciaSchema = new Schema({
+  nombre:   String,
+  mimeType: String,
+  data:     Buffer
+}, { _id: false })
+
 const inspeccionSchema = new Schema({
   estacion:              { type: String, required: true },
   operador:              String,
   fecha:                 { type: Date, default: Date.now },
+  planItemId:            { type: Schema.Types.ObjectId, ref: 'ItemPlan' },
   archivoNombre:         String,
   archivoMimeType:       String,
   equipos:               [equipoSchema],
   tieneFallas:            { type: Boolean, default: false },
-  tareasVerificadas:      [String],   // ítems/columnas verificados, ej: ['Puertas', 'Ventanas']
+  tareasVerificadas:      [String],
   observacionesGenerales: String,
   tipoVerificacion:       { type: String, enum: ['Personal AUBASA', 'Proveedor Externo'], default: 'Personal AUBASA' },
   proveedorExterno:       String,
@@ -24,7 +31,8 @@ const inspeccionSchema = new Schema({
   desviosGenerados:       [{ type: Schema.Types.ObjectId, ref: 'Desvio' }],
   evidenciaNombre:        String,
   evidenciaMimeType:      String,
-  evidenciaData:          Buffer
+  evidenciaData:          Buffer,
+  evidencias:             [evidenciaSchema]
 }, { timestamps: true })
 
 module.exports = mongoose.model('Inspeccion', inspeccionSchema)
