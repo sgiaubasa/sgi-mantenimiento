@@ -273,16 +273,22 @@ router.get('/kpis', authMW, async (req, res) => {
     const filtroInsp = estacion
       ? { ...filtroFechaInsp, estacion }
       : { ...filtroFechaInsp }
-    // Desvíos: usar createdAt (no tienen campo fecha de verificación)
-    const filtroFechaDesvio = { createdAt: { $gte: desde, $lt: hasta } }
 
-    const [totalMes, conFallasMes, pendientes, cerradosMes, inspeccionesMes, desviosDetectadosMes] = await Promise.all([
+    const [totalMes, conFallasMes, pendientes, inspeccionesMes] = await Promise.all([
       Inspeccion.countDocuments(filtroInsp),
       Inspeccion.countDocuments({ ...filtroInsp, tieneFallas: true }),
       Desvio.countDocuments({ estado: 'Pendiente' }),
-      Desvio.countDocuments({ estado: 'Cerrado', updatedAt: { $gte: desde, $lt: hasta } }),
-      Inspeccion.find(filtroInsp).select('equipos').lean(),
-      Desvio.countDocuments(filtroFechaDesvio)
+      Inspeccion.find(filtroInsp).select('equipos desviosGenerados').lean()
+    ])
+
+    // Desvíos detectados: los que pertenecen a inspecciones del período
+    // (los desvíos se crean cuando se sube la inspección, no cuando ocurrió)
+    const desvioIdsDelPeriodo = inspeccionesMes.flatMap(i => i.desviosGenerados || [])
+    const [desviosDetectadosMes, cerradosMes] = await Promise.all([
+      Promise.resolve(desvioIdsDelPeriodo.length),
+      desvioIdsDelPeriodo.length
+        ? Desvio.countDocuments({ _id: { $in: desvioIdsDelPeriodo }, estado: 'Cerrado' })
+        : Promise.resolve(0)
     ])
 
     // Indicador de Disponibilidad: ítems conformes / total ítems verificados
@@ -297,7 +303,7 @@ router.get('/kpis', authMW, async (req, res) => {
       ? Math.round((itemsConformes / itemsTotal) * 100)
       : null
 
-    // Indicador de Eficacia de Desvíos: cerrados / detectados este mes
+    // Indicador de Eficacia de Desvíos: cerrados / detectados en el período
     const eficaciaDesvios = desviosDetectadosMes > 0
       ? Math.round((cerradosMes / desviosDetectadosMes) * 100)
       : null
