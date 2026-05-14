@@ -282,12 +282,14 @@ router.get('/kpis', authMW, async (req, res) => {
     ])
 
     // Desvíos detectados: los que pertenecen a inspecciones del período
-    // (los desvíos se crean cuando se sube la inspección, no cuando ocurrió)
-    const desvioIdsDelPeriodo = inspeccionesMes.flatMap(i => i.desviosGenerados || [])
+    // Usamos countDocuments para contar documentos reales (evita IDs duplicados o borrados)
+    const inspeccionIdsDelPeriodo = inspeccionesMes.map(i => i._id)
     const [desviosDetectadosMes, cerradosMes] = await Promise.all([
-      Promise.resolve(desvioIdsDelPeriodo.length),
-      desvioIdsDelPeriodo.length
-        ? Desvio.countDocuments({ _id: { $in: desvioIdsDelPeriodo }, estado: 'Cerrado' })
+      inspeccionIdsDelPeriodo.length
+        ? Desvio.countDocuments({ idInspeccionOrigen: { $in: inspeccionIdsDelPeriodo } })
+        : Promise.resolve(0),
+      inspeccionIdsDelPeriodo.length
+        ? Desvio.countDocuments({ idInspeccionOrigen: { $in: inspeccionIdsDelPeriodo }, estado: 'Cerrado' })
         : Promise.resolve(0)
     ])
 

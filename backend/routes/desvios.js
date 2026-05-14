@@ -1,5 +1,6 @@
-const router = require('express').Router()
-const Desvio = require('../models/Desvio')
+const router    = require('express').Router()
+const Desvio    = require('../models/Desvio')
+const Inspeccion = require('../models/Inspeccion')
 
 function parseDate(str) {
   if (!str) return null
@@ -27,29 +28,32 @@ router.get('/', async (req, res) => {
     const filter = {}
     if (estado) filter.estado = estado
 
-    // Filtro por fecha de creación
+    // Filtro por fecha de la INSPECCIÓN ORIGEN (consistente con el KPI)
     if (desdeParam || hastaParam) {
-      filter.createdAt = {}
+      const filtroInsp = {}
       if (desdeParam) {
         const [y, m] = desdeParam.split('-').map(Number)
-        filter.createdAt.$gte = new Date(y, m - 1, 1)
+        filtroInsp.$gte = new Date(y, m - 1, 1)
       }
       if (hastaParam) {
         const [y, m] = hastaParam.split('-').map(Number)
-        filter.createdAt.$lt  = new Date(y, m, 1)
+        filtroInsp.$lt = new Date(y, m, 1)
       }
+      const filtroFechaInsp = { fecha: filtroInsp }
+      if (estacion) filtroFechaInsp.estacion = estacion
+      const inspIds = await Inspeccion.find(filtroFechaInsp).select('_id').lean()
+      filter.idInspeccionOrigen = { $in: inspIds.map(i => i._id) }
+    } else if (estacion) {
+      // Sin rango de fechas pero con estación: filtrar por inspección de esa estación
+      const inspIds = await Inspeccion.find({ estacion }).select('_id').lean()
+      filter.idInspeccionOrigen = { $in: inspIds.map(i => i._id) }
     }
 
-    let desvios = await Desvio.find(filter)
+    const desvios = await Desvio.find(filter)
       .populate('idInspeccionOrigen', 'estacion fecha archivoNombre')
       .populate('idInspeccionCierre', 'estacion fecha')
       .sort({ createdAt: -1 })
       .lean()
-
-    // Filtro por estación (via inspección origen — en memoria, es un conjunto pequeño)
-    if (estacion) {
-      desvios = desvios.filter(d => d.idInspeccionOrigen?.estacion === estacion)
-    }
 
     res.json(desvios)
   } catch (e) {
