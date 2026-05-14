@@ -217,13 +217,13 @@ async function loadKpis(estacion = '', desde = '', hasta = '') {
     setText('kpi-desvios-cerrados-mes', d.cerradosMes)
 
     if (d.disponibilidad !== null && d.itemsTotal > 0) {
-      setText('kpi-disponibilidad',     d.disponibilidad)
+      setText('kpi-disponibilidad',     d.disponibilidad + '%')
       setText('kpi-disponibilidad-sub', `${d.itemsConformes} conformes de ${d.itemsTotal} verificados`)
       colorearTrend('kpi-disponibilidad', d.disponibilidad, 95)
     }
 
     if (d.eficaciaDesvios !== null && d.desviosDetectadosMes > 0) {
-      setText('kpi-eficacia',     d.eficaciaDesvios)
+      setText('kpi-eficacia',     d.eficaciaDesvios + '%')
       setText('kpi-eficacia-sub', `${d.cerradosMes} cerrados de ${d.desviosDetectadosMes} detectados`)
       colorearTrend('kpi-eficacia', d.eficaciaDesvios, 75)
     }
