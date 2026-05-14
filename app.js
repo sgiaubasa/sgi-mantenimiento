@@ -1695,9 +1695,9 @@ async function abrirModalEditarInsp(id) {
 
     // Cargar ítems del plan para la estación de esta inspección
     const equipoSel = document.getElementById('ei-equipo-select')
-    equipoSel.innerHTML = '<option value="">— Sin ítem del plan —</option>'
+    equipoSel.innerHTML = '<option value="">— Sin tipo de instalación —</option>'
     try {
-      const anio   = new Date(insp.fecha || insp.createdAt).getFullYear()
+      const anio   = new Date().getFullYear()
       const params = new URLSearchParams({ anio, estacion: insp.estacion })
       const planItems = await apiFetch('/plan?' + params)
       for (const item of (planItems || [])) {
