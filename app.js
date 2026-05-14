@@ -1693,11 +1693,21 @@ async function abrirModalEditarInsp(id) {
       ).join('')
     }
 
-    // Poblar selector de equipos detectados
+    // Cargar ítems del plan para la estación de esta inspección
     const equipoSel = document.getElementById('ei-equipo-select')
-    const equipos = insp.equipos || []
-    equipoSel.innerHTML = '<option value="">— Sin equipo principal —</option>' +
-      equipos.map(e => `<option value="${escHtml(e.codigo)}">${escHtml(e.codigo)}${e.descripcion ? ' — ' + escHtml(e.descripcion) : ''}</option>`).join('')
+    equipoSel.innerHTML = '<option value="">— Sin ítem del plan —</option>'
+    try {
+      const anio   = new Date(insp.fecha || insp.createdAt).getFullYear()
+      const params = new URLSearchParams({ anio, estacion: insp.estacion })
+      const planItems = await apiFetch('/plan?' + params)
+      for (const item of (planItems || [])) {
+        const opt = document.createElement('option')
+        opt.value = item._id
+        opt.textContent = `${item.equipo}${item.codigoPrefix ? ' (' + item.codigoPrefix + ')' : ''}`
+        if (insp.planItemId === item._id || String(insp.planItemId) === String(item._id)) opt.selected = true
+        equipoSel.appendChild(opt)
+      }
+    } catch { /* silencioso */ }
 
     document.getElementById('modal-editar-insp').style.display = 'flex'
   } catch (err) { showNotification('Error: ' + err.message, 'error') }
@@ -1763,9 +1773,10 @@ async function guardarEdicionInsp() {
   const btn = document.getElementById('ei-btn-guardar')
   if (btn) { btn.disabled = true; btn.textContent = 'Guardando...' }
   try {
+    const planItemId = document.getElementById('ei-equipo-select')?.value || null
     await apiFetch(`/inspecciones/${id}`, {
       method: 'PUT',
-      body: JSON.stringify({ fecha, observacionesGenerales: observaciones, desviosNuevos })
+      body: JSON.stringify({ fecha, observacionesGenerales: observaciones, planItemId, desviosNuevos })
     })
     const msgs = ['Verificación actualizada.']
     if (desviosNuevos.length) msgs.push(`${desviosNuevos.length} desvío(s) agregado(s).`)

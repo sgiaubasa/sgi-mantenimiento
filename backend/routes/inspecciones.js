@@ -317,10 +317,11 @@ router.put('/:id', authMW, async (req, res) => {
     const insp = await Inspeccion.findById(req.params.id)
     if (!insp) return res.status(404).json({ error: 'Inspección no encontrada' })
 
-    const { fecha, observacionesGenerales, desviosNuevos = [] } = req.body
+    const { fecha, observacionesGenerales, planItemId, desviosNuevos = [] } = req.body
 
-    if (fecha)                          insp.fecha = parseDate(fecha)
+    if (fecha)                               insp.fecha = parseDate(fecha)
     if (observacionesGenerales !== undefined) insp.observacionesGenerales = observacionesGenerales || null
+    if (planItemId !== undefined)             insp.planItemId = planItemId || null
 
     // Agregar nuevos desvíos
     const idsNuevos = []
