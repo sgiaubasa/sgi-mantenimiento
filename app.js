@@ -1237,6 +1237,20 @@ async function cargarSelectIAPlan() {
 // ─── Modal: Verificación Manual ───────────────────────────────────────────────
 let planItemsCacheManual = []
 
+function mostrarTabManual() {
+  document.getElementById('tab-manual-content').style.display = ''
+  document.getElementById('tab-ia-content').style.display = 'none'
+  document.getElementById('tab-manual-btn').className = 'btn-primary btn-sm'
+  document.getElementById('tab-ia-btn').className = 'btn-secondary btn-sm'
+}
+
+function mostrarTabIA() {
+  document.getElementById('tab-manual-content').style.display = 'none'
+  document.getElementById('tab-ia-content').style.display = ''
+  document.getElementById('tab-manual-btn').className = 'btn-secondary btn-sm'
+  document.getElementById('tab-ia-btn').className = 'btn-primary btn-sm'
+}
+
 async function abrirModalManual() {
   // Resetear estado del modal
   document.getElementById('manual-estacion').value       = ''
@@ -1648,6 +1662,12 @@ async function abrirModalEditarInsp(id) {
       ).join('')
     }
 
+    // Poblar selector de equipos detectados
+    const equipoSel = document.getElementById('ei-equipo-select')
+    const equipos = insp.equipos || []
+    equipoSel.innerHTML = '<option value="">— Sin equipo principal —</option>' +
+      equipos.map(e => `<option value="${escHtml(e.codigo)}">${escHtml(e.codigo)}${e.descripcion ? ' — ' + escHtml(e.descripcion) : ''}</option>`).join('')
+
     document.getElementById('modal-editar-insp').style.display = 'flex'
   } catch (err) { showNotification('Error: ' + err.message, 'error') }
 }
@@ -1660,6 +1680,9 @@ function cerrarModalEditarInsp() {
 function agregarDesvioEdicionInsp() {
   const idx  = _desvioEditCount++
   const cont = document.getElementById('ei-desvios-nuevos')
+  const sel  = document.getElementById('ei-equipo-select')
+  const selectedCodigo = sel?.value || ''
+  const selectedDesc   = sel?.options[sel.selectedIndex]?.text?.split(' — ')[1] || ''
   const div  = document.createElement('div')
   div.style.cssText = 'background:#F8FAFC;border:1px solid #E0E5F2;border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:8px'
   div.innerHTML = `
@@ -1668,8 +1691,8 @@ function agregarDesvioEdicionInsp() {
       <button type="button" class="btn-icon-sm" style="color:var(--danger-color)" onclick="this.closest('div[data-idx]').remove()">✕</button>
     </div>
     <div class="form-row" style="gap:8px">
-      <input class="ei-dv-codigo" placeholder="Código equipo (ej: CC 03)" style="flex:1;font-size:13px;padding:7px 10px;border-radius:8px;border:1px solid #E0E5F2">
-      <input class="ei-dv-desc" placeholder="Descripción del equipo" style="flex:2;font-size:13px;padding:7px 10px;border-radius:8px;border:1px solid #E0E5F2">
+      <input class="ei-dv-codigo" placeholder="Código equipo (ej: CC 03)" value="${escHtml(selectedCodigo)}" style="flex:1;font-size:13px;padding:7px 10px;border-radius:8px;border:1px solid #E0E5F2">
+      <input class="ei-dv-desc" placeholder="Descripción del equipo" value="${escHtml(selectedDesc)}" style="flex:2;font-size:13px;padding:7px 10px;border-radius:8px;border:1px solid #E0E5F2">
     </div>
     <textarea class="ei-dv-obs" rows="2" placeholder="Descripción del desvío / falla observada" style="font-size:13px;padding:7px 10px;border-radius:8px;border:1px solid #E0E5F2;resize:vertical"></textarea>
     <input class="ei-dv-accion" placeholder="Acción a implementar" style="font-size:13px;padding:7px 10px;border-radius:8px;border:1px solid #E0E5F2">

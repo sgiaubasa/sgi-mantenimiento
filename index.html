@@ -252,73 +252,74 @@
                 <!-- PASO 1: Carga del documento -->
                 <section class="form-section" id="panel-upload">
                     <div class="chart-card full-width">
-                        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:4px">
-                            <div>
-                                <h3 class="chart-title" style="margin-bottom:2px">Analizar Registro de Control (IA)</h3>
-                                <p class="section-desc" style="margin:0">Cargá una foto o PDF del Registro Genérico y la IA extraerá los datos automáticamente.</p>
+                        <!-- Tabs Carga Manual / IA -->
+                        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
+                            <div style="display:flex;gap:8px">
+                                <button type="button" id="tab-manual-btn" class="btn-primary btn-sm" onclick="mostrarTabManual()">✏ Carga Manual</button>
+                                <button type="button" id="tab-ia-btn" class="btn-secondary btn-sm" onclick="mostrarTabIA()">🤖 Analizar con IA</button>
                             </div>
-                            <button type="button" class="btn-secondary btn-sm" onclick="abrirModalManual()" style="white-space:nowrap">
-                                ✏ Carga Manual
-                            </button>
                         </div>
-                        <form id="analizar-form" class="custom-form" style="margin-top:16px">
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label for="estacion-manual">Estación (respaldo manual)</label>
-                                    <select id="estacion-manual" onchange="cargarSelectIAPlan()">
-                                        <option value="">Se detecta del documento</option>
-                                        <option value="Berazategui">Berazategui</option>
-                                        <option value="Bernal">Bernal</option>
-                                        <option value="Dock Sud">Dock Sud</option>
-                                        <option value="Hudson">Hudson</option>
-                                        <option value="Quilmes">Quilmes</option>
-                                        <option value="Samborombón">Samborombón</option>
-                                    </select>
-                                    <small class="helper-text">La IA detecta la estación del documento. Solo completar si falla la detección.</small>
-                                </div>
-                                <div class="form-group">
-                                    <label for="archivo">Registro de Control (PDF o imágenes)</label>
-                                    <div class="file-upload">
-                                        <input type="file" id="archivo" accept=".pdf,image/jpeg,image/png,image/webp" multiple required>
-                                        <div class="file-upload-visual">
-                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-                                            <span id="file-visual-text">Subir PDF o imágenes del Registro Genérico</span>
-                                        </div>
-                                    </div>
-                                    <small class="helper-text">Podés subir varias imágenes a la vez · Máx. 10 MB por archivo · PDF, JPG, PNG, WebP</small>
-                                </div>
-                            </div>
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label>Equipo del plan <small style="font-weight:400;color:var(--text-secondary)">(opcional — vincula con cumplimiento)</small></label>
-                                    <select id="ia-item-plan">
-                                        <option value="">Detectar automáticamente</option>
-                                    </select>
-                                    <small class="helper-text">Seleccioná el equipo que corresponde al documento para relacionarlo al plan.</small>
-                                </div>
-                            </div>
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label for="tipo-verificacion">Tipo de verificación</label>
-                                    <select id="tipo-verificacion">
-                                        <option value="Personal AUBASA">Personal AUBASA</option>
-                                        <option value="Proveedor Externo">Proveedor Externo</option>
-                                    </select>
-                                </div>
-                                <div class="form-group" id="grupo-proveedor" style="display:none">
-                                    <label for="nombre-proveedor">Nombre del proveedor externo</label>
-                                    <input type="text" id="nombre-proveedor" placeholder="Ej: Servicios Eléctricos SA">
-                                </div>
-                            </div>
-                            <div class="form-actions">
-                                <button type="submit" class="btn-primary" id="btn-analizar">
-                                    <span id="btn-analizar-icon">
-                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-                                    </span>
-                                    <span id="btn-analizar-text">Analizar con IA</span>
+
+                        <!-- TAB MANUAL (default) -->
+                        <div id="tab-manual-content">
+                            <p class="section-desc" style="margin-bottom:14px">Completá los datos de la verificación de forma manual.</p>
+                            <div style="text-align:center;padding:12px">
+                                <button type="button" class="btn-primary" onclick="abrirModalManual()" style="padding:12px 32px;font-size:15px">
+                                    ✏ Iniciar Carga Manual
                                 </button>
                             </div>
-                        </form>
+                        </div>
+
+                        <!-- TAB IA (oculto por defecto) -->
+                        <div id="tab-ia-content" style="display:none">
+                            <p class="section-desc" style="margin-bottom:14px">Subí una foto o PDF del Registro Genérico y la IA extraerá los datos automáticamente.</p>
+                            <form id="analizar-form" class="custom-form">
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="estacion-manual">Estación <span style="color:var(--danger-color)">*</span></label>
+                                        <select id="estacion-manual" onchange="cargarSelectIAPlan()" required>
+                                            <option value="">— Seleccioná la estación —</option>
+                                            <option value="Berazategui">Berazategui</option>
+                                            <option value="Bernal">Bernal</option>
+                                            <option value="Dock Sud">Dock Sud</option>
+                                            <option value="Hudson">Hudson</option>
+                                            <option value="Quilmes">Quilmes</option>
+                                            <option value="Samborombón">Samborombón</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="archivo">Imágenes o PDF del Registro Genérico <span style="color:var(--danger-color)">*</span></label>
+                                        <div class="file-upload">
+                                            <input type="file" id="archivo" accept=".pdf,image/jpeg,image/png,image/webp" multiple required>
+                                            <div class="file-upload-visual">
+                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                                                <span id="file-visual-text">Subir PDF o imágenes del Registro Genérico</span>
+                                            </div>
+                                        </div>
+                                        <small class="helper-text">Podés subir varias imágenes a la vez · Máx. 10 MB · PDF, JPG, PNG, WebP</small>
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="tipo-verificacion">Tipo de verificación</label>
+                                        <select id="tipo-verificacion">
+                                            <option value="Personal AUBASA">Personal AUBASA</option>
+                                            <option value="Proveedor Externo">Proveedor Externo</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group" id="grupo-proveedor" style="display:none">
+                                        <label for="nombre-proveedor">Nombre del proveedor externo</label>
+                                        <input type="text" id="nombre-proveedor" placeholder="Ej: Servicios Eléctricos SA">
+                                    </div>
+                                </div>
+                                <div class="form-actions">
+                                    <button type="submit" class="btn-primary" id="btn-analizar">
+                                        <span id="btn-analizar-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg></span>
+                                        <span id="btn-analizar-text">Analizar con IA</span>
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
                     </div>
                 </section>
 
@@ -940,6 +941,14 @@
                 <div>
                     <label style="font-size:13px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.4px;display:block;margin-bottom:8px">Desvíos ya registrados</label>
                     <div id="ei-desvios-existentes" style="display:flex;flex-direction:column;gap:6px"></div>
+                </div>
+
+                <!-- Selector de equipo para corrección -->
+                <div class="form-group">
+                    <label>Equipo detectado <small style="font-weight:400;color:var(--text-secondary)">(podés cambiar si la IA lo detectó mal)</small></label>
+                    <select id="ei-equipo-select" style="width:100%">
+                        <option value="">— Sin equipo principal —</option>
+                    </select>
                 </div>
 
                 <!-- Agregar nuevos desvíos -->
