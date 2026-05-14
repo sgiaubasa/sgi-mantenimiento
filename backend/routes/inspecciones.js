@@ -303,16 +303,78 @@ router.get('/kpis', authMW, async (req, res) => {
       }
     }
 
-    // Desvíos abiertos de inspecciones ANTERIORES al período que siguen pendientes
-    // (se detectaron antes y aún no se cerraron → siguen impactando la disponibilidad)
+    // Desvíos pendientes heredados: cada PERÍODO sin resolver = 1 ítem con falla adicional
+    // La periodicidad del equipo en el plan determina la unidad de tiempo.
+    // Si la periodicidad cambió históricamente, se respeta cada tramo con su valor.
+    const MS_DIA     = 24 * 60 * 60 * 1000
+    const finPeriodo = hasta
+
+    // Días equivalentes por periodicidad
+    const DIAS_PERIOD = {
+      diario: 1, semanal: 7, quincenal: 15, mensual: 30,
+      bimestral: 60, trimestral: 90, semestral: 180, anual: 365
+    }
+
+    // Calcula períodos acumulados para un desvío según versiones históricas del plan
+    async function periodosAcumulados(desvio) {
+      const insp       = desvio.idInspeccionOrigen
+      const fechaDetec = new Date(insp?.fecha || desvio.createdAt)
+      const estInsp    = insp?.estacion
+      const planItemId = insp?.planItemId
+
+      // Buscar todas las versiones del ítem del plan (historial de periodicidad)
+      let versiones = []
+      if (planItemId) {
+        const base = await ItemPlan.findById(planItemId).lean()
+        if (base) versiones = await ItemPlan.find({ estacion: base.estacion, equipo: base.equipo }).sort({ vigenciaDesde: 1 }).lean()
+      }
+      if (!versiones.length) {
+        // Fallback: match por prefijo de código del equipo
+        const prefix = (desvio.codigoEquipo || '').replace(/[-\s\d].*/, '').toUpperCase()
+        if (prefix && estInsp) {
+          versiones = await ItemPlan.find({ estacion: estInsp, codigoPrefix: prefix }).sort({ vigenciaDesde: 1 }).lean()
+        }
+      }
+
+      if (!versiones.length) {
+        // Sin plan encontrado → usar semanas por defecto
+        const dias = (finPeriodo - fechaDetec) / MS_DIA
+        return Math.max(1, Math.ceil(dias / 7))
+      }
+
+      // Sumar períodos tramo a tramo respetando cada versión de periodicidad
+      let totalPeriodos = 0
+      for (const v of versiones) {
+        const vigDesde = v.vigenciaDesde ? new Date(v.vigenciaDesde) : new Date(0)
+        const vigHasta = v.vigenciaHasta ? new Date(v.vigenciaHasta) : finPeriodo
+        const inicio   = Math.max(fechaDetec.getTime(), vigDesde.getTime())
+        const fin      = Math.min(finPeriodo.getTime(), vigHasta.getTime())
+        if (inicio >= fin) continue
+        const dias = (fin - inicio) / MS_DIA
+        totalPeriodos += dias / (DIAS_PERIOD[v.periodicidad] || 7)
+      }
+      return Math.max(1, Math.ceil(totalPeriodos))
+    }
+
     const inspAnterioresFiltro = { fecha: { $lt: desde }, ...(estacion ? { estacion } : {}) }
     const inspAntIds = await Inspeccion.find(inspAnterioresFiltro).select('_id').lean()
-    const desviosPreviosPendientes = inspAntIds.length
-      ? await Desvio.countDocuments({ idInspeccionOrigen: { $in: inspAntIds.map(i => i._id) }, estado: 'Pendiente' })
-      : 0
-    // Cada desvío pendiente heredado = 1 ítem con falla adicional
-    itemsTotal    += desviosPreviosPendientes
-    // itemsConformes += 0  (son fallas, no suman a conformes)
+
+    let periodosHeredados        = 0
+    let desviosPreviosPendientes = 0
+    if (inspAntIds.length) {
+      const devsPendientes = await Desvio.find({
+        idInspeccionOrigen: { $in: inspAntIds.map(i => i._id) },
+        estado: 'Pendiente'
+      }).populate('idInspeccionOrigen', 'fecha estacion planItemId').lean()
+
+      desviosPreviosPendientes = devsPendientes.length
+      for (const d of devsPendientes) {
+        periodosHeredados += await periodosAcumulados(d)
+      }
+    }
+    // Cada período sin resolución = 1 ítem con falla (sin tocar el contador de desvíos)
+    itemsTotal += periodosHeredados
+    const semanasHeredadas = periodosHeredados  // alias para el frontend
 
     const disponibilidad = itemsTotal > 0
       ? Math.round((itemsConformes / itemsTotal) * 100)
@@ -327,7 +389,7 @@ router.get('/kpis', authMW, async (req, res) => {
       totalMes, conFallasMes,
       pendientes, cerradosMes,
       itemsConformes, itemsTotal, disponibilidad,
-      desviosPreviosPendientes,
+      desviosPreviosPendientes, semanasHeredadas,
       desviosDetectadosMes, eficaciaDesvios
     })
   } catch (e) {

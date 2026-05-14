@@ -221,7 +221,7 @@ async function loadKpis(estacion = '', desde = '', hasta = '') {
       setText('kpi-disponibilidad',     d.disponibilidad + '%')
       let subDisp = `${d.itemsConformes} conformes de ${d.itemsTotal} verificados`
       if (d.desviosPreviosPendientes > 0)
-        subDisp += ` · ${d.desviosPreviosPendientes} falla${d.desviosPreviosPendientes > 1 ? 's' : ''} heredada${d.desviosPreviosPendientes > 1 ? 's' : ''} sin cerrar`
+        subDisp += ` · ${d.desviosPreviosPendientes} desvío${d.desviosPreviosPendientes > 1 ? 's' : ''} sin cerrar (${d.semanasHeredadas} semanas acumuladas)`
       setText('kpi-disponibilidad-sub', subDisp)
       colorearTrend('kpi-disponibilidad', d.disponibilidad, 95)
     } else {
