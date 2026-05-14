@@ -1622,13 +1622,37 @@ async function verEvidencia(id, count) {
   try {
     const token = localStorage.getItem('sgi_token')
     const total = count || 1
+
+    if (total === 1) {
+      const res = await fetch(`/api/inspecciones/${id}/evidencia?idx=0`, { headers: { Authorization: `Bearer ${token}` } })
+      if (!res.ok) { showNotification('Esta verificación no tiene evidencia adjunta.', 'error'); return }
+      window.open(URL.createObjectURL(await res.blob()), '_blank')
+      return
+    }
+
+    // Múltiples imágenes: abrimos UNA pestaña con galería
+    const blobs = []
     for (let idx = 0; idx < total; idx++) {
       const res = await fetch(`/api/inspecciones/${id}/evidencia?idx=${idx}`, { headers: { Authorization: `Bearer ${token}` } })
-      if (!res.ok) { if (idx === 0) showNotification('Esta verificación no tiene evidencia adjunta.', 'error'); break }
-      const blob = await res.blob()
-      const url  = URL.createObjectURL(blob)
-      window.open(url, '_blank')
+      if (!res.ok) break
+      blobs.push(await res.blob())
     }
+    if (!blobs.length) { showNotification('Sin evidencia adjunta.', 'error'); return }
+
+    const items = blobs.map((b, i) => {
+      const url = URL.createObjectURL(b)
+      return b.type.startsWith('image/')
+        ? `<div class="item"><p>Imagen ${i + 1} de ${blobs.length}</p><img src="${url}"></div>`
+        : `<div class="item"><p>Archivo ${i + 1} de ${blobs.length}</p><embed src="${url}" type="${b.type}" style="width:100%;height:85vh"></div>`
+    }).join('')
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Evidencias (${blobs.length})</title>
+      <style>*{box-sizing:border-box}body{margin:0;background:#1a1a2e;font-family:sans-serif;display:flex;flex-direction:column;align-items:center;gap:20px;padding:20px}
+      .item{width:100%;max-width:900px;display:flex;flex-direction:column;align-items:center;gap:8px}
+      .item p{color:#aaa;margin:0;font-size:13px}.item img{max-width:100%;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.5)}</style>
+      </head><body>${items}</body></html>`
+    const pageBlob = new Blob([html], { type: 'text/html' })
+    window.open(URL.createObjectURL(pageBlob), '_blank')
   } catch { showNotification('Error al cargar evidencia.', 'error') }
 }
 
