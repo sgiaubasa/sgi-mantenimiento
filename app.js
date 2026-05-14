@@ -219,7 +219,10 @@ async function loadKpis(estacion = '', desde = '', hasta = '') {
 
     if (d.disponibilidad !== null && d.itemsTotal > 0) {
       setText('kpi-disponibilidad',     d.disponibilidad + '%')
-      setText('kpi-disponibilidad-sub', `${d.itemsConformes} conformes de ${d.itemsTotal} verificados`)
+      let subDisp = `${d.itemsConformes} conformes de ${d.itemsTotal} verificados`
+      if (d.desviosPreviosPendientes > 0)
+        subDisp += ` · ${d.desviosPreviosPendientes} falla${d.desviosPreviosPendientes > 1 ? 's' : ''} heredada${d.desviosPreviosPendientes > 1 ? 's' : ''} sin cerrar`
+      setText('kpi-disponibilidad-sub', subDisp)
       colorearTrend('kpi-disponibilidad', d.disponibilidad, 95)
     } else {
       setText('kpi-disponibilidad',     '—')

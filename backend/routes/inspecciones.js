@@ -294,6 +294,7 @@ router.get('/kpis', authMW, async (req, res) => {
     ])
 
     // Indicador de Disponibilidad: ítems conformes / total ítems verificados
+    // + desvíos pendientes activos al final del período (siguen siendo fallas hasta cerrarse)
     let itemsConformes = 0, itemsTotal = 0
     for (const insp of inspeccionesMes) {
       for (const eq of (insp.equipos || [])) {
@@ -301,6 +302,18 @@ router.get('/kpis', authMW, async (req, res) => {
         if (eq.estado === 'correcto') itemsConformes++
       }
     }
+
+    // Desvíos abiertos de inspecciones ANTERIORES al período que siguen pendientes
+    // (se detectaron antes y aún no se cerraron → siguen impactando la disponibilidad)
+    const inspAnterioresFiltro = { fecha: { $lt: desde }, ...(estacion ? { estacion } : {}) }
+    const inspAntIds = await Inspeccion.find(inspAnterioresFiltro).select('_id').lean()
+    const desviosPreviosPendientes = inspAntIds.length
+      ? await Desvio.countDocuments({ idInspeccionOrigen: { $in: inspAntIds.map(i => i._id) }, estado: 'Pendiente' })
+      : 0
+    // Cada desvío pendiente heredado = 1 ítem con falla adicional
+    itemsTotal    += desviosPreviosPendientes
+    // itemsConformes += 0  (son fallas, no suman a conformes)
+
     const disponibilidad = itemsTotal > 0
       ? Math.round((itemsConformes / itemsTotal) * 100)
       : null
@@ -314,6 +327,7 @@ router.get('/kpis', authMW, async (req, res) => {
       totalMes, conFallasMes,
       pendientes, cerradosMes,
       itemsConformes, itemsTotal, disponibilidad,
+      desviosPreviosPendientes,
       desviosDetectadosMes, eficaciaDesvios
     })
   } catch (e) {
