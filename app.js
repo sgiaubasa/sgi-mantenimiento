@@ -178,6 +178,7 @@ navItems.forEach(item => {
     setTimeout(() => target.classList.add('active'), 10)
     const meta = viewMeta[targetId]
     if (meta) { pageTitle.textContent = meta.title; pageSubtitle.textContent = meta.subtitle; meta.onEnter?.() }
+    cerrarSidebar()
   })
 })
 
@@ -1814,6 +1815,19 @@ function toLocalISODate(dateStr) {
   catch { return '' }
 }
 function escHtml(str) { return (str || '').replace(/'/g, "\\'").replace(/"/g, '&quot;') }
+
+// ─── Sidebar móvil ────────────────────────────────────────────────────────────
+function toggleSidebar() {
+  const sidebar  = document.getElementById('sidebar')
+  const overlay  = document.getElementById('sidebar-overlay')
+  const isOpen   = sidebar.classList.contains('open')
+  sidebar.classList.toggle('open', !isOpen)
+  overlay.classList.toggle('open', !isOpen)
+}
+function cerrarSidebar() {
+  document.getElementById('sidebar')?.classList.remove('open')
+  document.getElementById('sidebar-overlay')?.classList.remove('open')
+}
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 ;(function init() {

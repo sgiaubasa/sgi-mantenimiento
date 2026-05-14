@@ -37,10 +37,13 @@
         </div>
     </div>
 
+    <!-- Overlay móvil para cerrar sidebar -->
+    <div class="sidebar-overlay" id="sidebar-overlay" onclick="cerrarSidebar()"></div>
+
     <div class="dashboard-container" id="dashboard" style="display:none">
 
         <!-- Sidebar -->
-        <aside class="sidebar">
+        <aside class="sidebar" id="sidebar">
             <div class="logo-area">
                 <div class="logo-icon">A</div>
                 <h2>AUBASA</h2>
@@ -78,9 +81,14 @@
         <!-- Main Content -->
         <main class="main-content">
             <header class="top-header">
-                <div>
-                    <h1 class="page-title" id="dynamic-title">Indicadores del Sistema de Gestión Integrado</h1>
-                    <p class="page-subtitle" id="dynamic-subtitle">Monitoreo en tiempo real · Norma ISO 9001</p>
+                <div style="display:flex;align-items:center;gap:12px">
+                    <button class="hamburger-btn" onclick="toggleSidebar()" aria-label="Menú">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                    </button>
+                    <div>
+                        <h1 class="page-title" id="dynamic-title">Indicadores del Sistema de Gestión Integrado</h1>
+                        <p class="page-subtitle" id="dynamic-subtitle">Monitoreo en tiempo real · Norma ISO 9001</p>
+                    </div>
                 </div>
                 <div class="user-profile">
                     <div>
