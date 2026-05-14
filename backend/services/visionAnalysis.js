@@ -45,25 +45,6 @@ function parseRespuesta(raw) {
   return parsed
 }
 
-// Convierte primera página de PDF a PNG usando pdfjs-dist + canvas
-async function pdfToPng(fileBuffer) {
-  const pdfjsLib    = require('pdfjs-dist/legacy/build/pdf.js')
-  const { createCanvas } = require('canvas')
-
-  const data = new Uint8Array(fileBuffer)
-  const doc  = await pdfjsLib.getDocument({ data, verbosity: 0 }).promise
-  const page = await doc.getPage(1)
-
-  const scale    = 2
-  const viewport = page.getViewport({ scale })
-  const canvas   = createCanvas(viewport.width, viewport.height)
-  const ctx      = canvas.getContext('2d')
-
-  await page.render({ canvasContext: ctx, viewport }).promise
-
-  return canvas.toBuffer('image/png')
-}
-
 async function analyzeImageGroq(fileBuffer, mimeType) {
   const base64 = fileBuffer.toString('base64')
   const resp = await groq.chat.completions.create({
@@ -105,10 +86,9 @@ async function analyzeDocument(fileBuffer, mimeType) {
       console.log('[IA] pdf-parse error:', e.message)
     }
 
-    // 2. PDF escaneado → convertir primera página a PNG → Groq Vision
-    console.log('[IA] PDF escaneado → convirtiendo a imagen → Groq Vision')
-    const pngBuffer = await pdfToPng(fileBuffer)
-    return await analyzeImageGroq(pngBuffer, 'image/png')
+    // 2. PDF escaneado → no se puede procesar sin texto
+    console.log('[IA] PDF escaneado sin texto extraíble')
+    throw new Error('El PDF parece ser escaneado y no tiene texto extraíble. Por favor tomá una foto del registro y subila como imagen (JPG o PNG).')
   }
 
   // ── Imágenes → Groq Vision ────────────────────────────────────────────────
