@@ -505,25 +505,36 @@ document.getElementById('tipo-verificacion')?.addEventListener('change', functio
 // ─── File input visual ────────────────────────────────────────────────────────
 const fileInput      = document.getElementById('archivo')
 const fileVisualText = document.getElementById('file-visual-text')
+let currentFiles = []  // array de File
 
 if (fileInput) {
   fileInput.addEventListener('change', e => {
-    currentFile = e.target.files[0] || null
-    if (currentFile) { fileVisualText.textContent = currentFile.name; fileVisualText.style.color = 'var(--success-color)' }
-    else resetFileVisual()
+    currentFiles = Array.from(e.target.files)
+    currentFile  = currentFiles[0] || null
+    if (currentFiles.length === 1) {
+      fileVisualText.textContent = currentFiles[0].name
+      fileVisualText.style.color = 'var(--success-color)'
+    } else if (currentFiles.length > 1) {
+      fileVisualText.textContent = currentFiles.length + ' imágenes seleccionadas'
+      fileVisualText.style.color = 'var(--success-color)'
+    } else {
+      resetFileVisual()
+    }
   })
 }
 function resetFileVisual() {
-  if (fileVisualText) { fileVisualText.textContent = 'Subir PDF o imagen del Registro Genérico'; fileVisualText.style.color = 'var(--primary-color)' }
+  currentFiles = []
+  currentFile  = null
+  if (fileVisualText) { fileVisualText.textContent = 'Subir PDF o imágenes del Registro Genérico'; fileVisualText.style.color = 'var(--primary-color)' }
 }
 
 // ─── PASO 1: Análisis con IA ──────────────────────────────────────────────────
 document.getElementById('analizar-form')?.addEventListener('submit', async e => {
   e.preventDefault()
-  if (!currentFile) { showNotification('Seleccioná un archivo PDF o imagen.', 'error'); return }
+  if (!currentFiles.length) { showNotification('Seleccioná al menos un archivo PDF o imagen.', 'error'); return }
   setBtnLoading(true)
   const fd = new FormData()
-  fd.append('archivo', currentFile)
+  currentFiles.forEach(f => fd.append('archivos', f))
   try {
     const { analisis, desviosCierrePosible: desvios } = await apiFormFetch('/inspecciones/analizar', fd)
     analisisActual       = analisis
@@ -677,7 +688,7 @@ document.getElementById('btn-confirmar-guardar')?.addEventListener('click', asyn
   const nomProv   = document.getElementById('nombre-proveedor')?.value  || ''
 
   const fd = new FormData()
-  fd.append('archivo', currentFile)
+  currentFiles.forEach(f => fd.append('archivos', f))
   fd.append('datos', JSON.stringify({
     analisis:         analisisActual,
     estacion:         document.getElementById('estacion-manual').value,

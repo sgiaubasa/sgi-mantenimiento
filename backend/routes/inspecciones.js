@@ -28,16 +28,19 @@ const upload = multer({
 })
 
 // ─── POST /analizar ──────────────────────────────────────────────────────────
-// Analiza el documento con IA. No guarda en DB. Devuelve:
-//   - analisis: { estacion, fecha, operador, equipos, observacionesGenerales }
-//   - desviosCierrePosible: desvíos abiertos para equipos que aparecen como "correcto"
-router.post('/analizar', authMW, upload.single('archivo'), async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'No se recibió archivo' })
+// Analiza uno o varios archivos con IA y fusiona los resultados. No guarda en DB.
+router.post('/analizar', authMW, upload.array('archivos', 10), async (req, res) => {
+  if (!req.files || req.files.length === 0) return res.status(400).json({ error: 'No se recibió ningún archivo' })
 
   try {
-    const analisis = await analyzeDocument(req.file.buffer, req.file.mimetype)
+    // Analizar cada archivo en paralelo
+    const resultados = await Promise.all(
+      req.files.map(f => analyzeDocument(f.buffer, f.mimetype))
+    )
 
-    // Buscar desvíos abiertos para equipos que aparecen como "correcto" en el nuevo doc
+    // Fusionar resultados en un solo objeto
+    const analisis = fusionarAnalisis(resultados)
+
     const codigosOk = (analisis.equipos || [])
       .filter(e => e.estado === 'correcto')
       .map(e => e.codigo)
@@ -55,14 +58,44 @@ router.post('/analizar', authMW, upload.single('archivo'), async (req, res) => {
   }
 })
 
+function fusionarAnalisis(resultados) {
+  const merged = {
+    estacion:              null,
+    fecha:                 null,
+    operador:              null,
+    tareasVerificadas:     [],
+    equipos:               [],
+    observacionesGenerales: null
+  }
+  const obsArr = []
+  for (const r of resultados) {
+    if (!merged.estacion  && r.estacion)  merged.estacion  = r.estacion
+    if (!merged.fecha     && r.fecha)     merged.fecha     = r.fecha
+    if (!merged.operador  && r.operador)  merged.operador  = r.operador
+    if (r.observacionesGenerales) obsArr.push(r.observacionesGenerales)
+    // Unión de tareas verificadas (sin duplicados)
+    for (const t of (r.tareasVerificadas || [])) {
+      if (!merged.tareasVerificadas.includes(t)) merged.tareasVerificadas.push(t)
+    }
+    // Acumular equipos (sin duplicar por código)
+    for (const eq of (r.equipos || [])) {
+      const existe = merged.equipos.find(e => e.codigo === eq.codigo)
+      if (!existe) merged.equipos.push(eq)
+    }
+  }
+  if (obsArr.length) merged.observacionesGenerales = obsArr.join(' | ')
+  return merged
+}
+
 // ─── POST / ──────────────────────────────────────────────────────────────────
 // Guarda la inspección completa junto con gestión de desvíos.
 // Body (multipart):
 //   archivo:   File  — documento analizado por IA (se guarda como evidencia)
 //   evidencia: File? — archivo adicional de evidencia (opcional, solo si no viene con archivo IA)
 //   datos:     JSON string { analisis, estacion, desviosNuevos[], desviosCerrar[] }
-router.post('/', authMW, upload.fields([{ name: 'archivo', maxCount: 1 }, { name: 'evidencia', maxCount: 1 }]), async (req, res) => {
-  const archivoIA   = req.files?.archivo?.[0]
+router.post('/', authMW, upload.fields([{ name: 'archivos', maxCount: 10 }, { name: 'evidencia', maxCount: 1 }]), async (req, res) => {
+  const archivosIA  = req.files?.archivos || []
+  const archivoIA   = archivosIA[0]
   const archivoEv   = req.files?.evidencia?.[0]
   if (!archivoIA) return res.status(400).json({ error: 'No se recibió archivo' })
 
