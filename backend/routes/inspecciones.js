@@ -479,7 +479,7 @@ router.get('/:id/evidencia', authMW, async (req, res) => {
 // ─── GET / ───────────────────────────────────────────────────────────────────
 router.get('/', async (req, res) => {
   try {
-    const { estacion, desde, hasta, tipo, fallas, equipo, texto } = req.query
+    const { estacion, desde, hasta, tipo, fallas, prefix } = req.query
     const filter = {}
 
     if (estacion) filter.estacion = estacion
@@ -504,16 +504,9 @@ router.get('/', async (req, res) => {
     if (fallas === 'si') filter.tieneFallas = true
     else if (fallas === 'no') filter.tieneFallas = false
 
-    // Búsqueda por equipo o texto libre (busca en tareasVerificadas, observacionesGenerales, equipos.codigo)
-    if (texto) {
-      const re = new RegExp(texto, 'i')
-      filter.$or = [
-        { 'equipos.codigo': re },
-        { 'equipos.descripcion': re },
-        { tareasVerificadas: re },
-        { observacionesGenerales: re },
-        { operador: re }
-      ]
+    // Filtro por prefijo de tipo de equipo (ej: "CC" → busca equipos.codigo que empieza con CC)
+    if (prefix) {
+      filter['equipos.codigo'] = new RegExp('^' + prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')
     }
 
     const inspecciones = await Inspeccion.find(filter)

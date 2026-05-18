@@ -1575,15 +1575,34 @@ async function guardarCambioPeriod() {
 }
 
 // ─── Repositorio de verificaciones ───────────────────────────────────────────
-// Debounce para búsqueda de texto en repositorio
-let _repoDebounceTimer = null
-function debounceRepo() {
-  clearTimeout(_repoDebounceTimer)
-  _repoDebounceTimer = setTimeout(() => loadRepositorio(), 500)
+// Carga los tipos de equipo del plan para el desplegable del repositorio
+async function cargarTiposEquipoRepo() {
+  const sel = document.getElementById('repo-equipo-tipo')
+  if (!sel || sel.options.length > 1) return  // ya cargado
+  try {
+    const items = await apiFetch('/plan')
+    // Unique por codigoPrefix
+    const vistos = new Set()
+    const tipos  = []
+    for (const it of items) {
+      const key = it.codigoPrefix || ''
+      if (!vistos.has(key)) {
+        vistos.add(key)
+        tipos.push({ equipo: it.equipo, prefix: key })
+      }
+    }
+    tipos.sort((a, b) => a.equipo.localeCompare(b.equipo))
+    for (const t of tipos) {
+      const opt = document.createElement('option')
+      opt.value = t.prefix
+      opt.textContent = t.prefix ? `${t.equipo} (${t.prefix})` : t.equipo
+      sel.appendChild(opt)
+    }
+  } catch { /* silencioso */ }
 }
 
 function limpiarFiltrosRepo() {
-  const ids = ['repo-estacion','repo-desde','repo-hasta','repo-tipo','repo-fallas','repo-texto']
+  const ids = ['repo-estacion','repo-desde','repo-hasta','repo-tipo','repo-fallas','repo-equipo-tipo']
   ids.forEach(id => { const el = document.getElementById(id); if (el) el.value = '' })
   loadRepositorio()
 }
@@ -1595,27 +1614,29 @@ async function loadRepositorio() {
   lista.innerHTML = '<p class="empty-state">Cargando...</p>'
   if (badge) badge.textContent = ''
 
-  const estacion = document.getElementById('repo-estacion')?.value || ''
-  const desde    = document.getElementById('repo-desde')?.value   || ''
-  const hasta    = document.getElementById('repo-hasta')?.value   || ''
-  const tipo     = document.getElementById('repo-tipo')?.value    || ''
-  const fallas   = document.getElementById('repo-fallas')?.value  || ''
-  const texto    = document.getElementById('repo-texto')?.value?.trim() || ''
+  await cargarTiposEquipoRepo()
+
+  const estacion   = document.getElementById('repo-estacion')?.value    || ''
+  const desde      = document.getElementById('repo-desde')?.value       || ''
+  const hasta      = document.getElementById('repo-hasta')?.value       || ''
+  const tipo       = document.getElementById('repo-tipo')?.value        || ''
+  const fallas     = document.getElementById('repo-fallas')?.value      || ''
+  const equipoTipo = document.getElementById('repo-equipo-tipo')?.value || ''
 
   const params = new URLSearchParams()
-  if (estacion) params.set('estacion', estacion)
-  if (desde)    params.set('desde', desde)
-  if (hasta)    params.set('hasta', hasta)
-  if (tipo)     params.set('tipo', tipo)
-  if (fallas)   params.set('fallas', fallas)
-  if (texto)    params.set('texto', texto)
+  if (estacion)   params.set('estacion', estacion)
+  if (desde)      params.set('desde', desde)
+  if (hasta)      params.set('hasta', hasta)
+  if (tipo)       params.set('tipo', tipo)
+  if (fallas)     params.set('fallas', fallas)
+  if (equipoTipo) params.set('prefix', equipoTipo)
 
   try {
     const qs = params.toString()
     const inspecciones = await apiFetch('/inspecciones' + (qs ? '?' + qs : ''))
 
     // Badge de resultados
-    const hayFiltros = estacion || desde || hasta || tipo || fallas || texto
+    const hayFiltros = estacion || desde || hasta || tipo || fallas || equipoTipo
     if (badge) {
       badge.textContent = hayFiltros
         ? `${inspecciones.length} resultado${inspecciones.length !== 1 ? 's' : ''} con los filtros aplicados`

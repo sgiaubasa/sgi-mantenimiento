@@ -513,10 +513,12 @@
                                         <option value="no">Sin fallas</option>
                                     </select>
                                 </div>
-                                <!-- Texto libre -->
-                                <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:160px">
-                                    <label style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px">Buscar (equipo, tarea, operador…)</label>
-                                    <input type="text" id="repo-texto" class="repo-select" placeholder="Ej: CC 01, Luminarias, Juan…" oninput="debounceRepo()">
+                                <!-- Tipo de equipo (macro) -->
+                                <div style="display:flex;flex-direction:column;gap:4px;min-width:180px">
+                                    <label style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px">Tipo de equipo</label>
+                                    <select id="repo-equipo-tipo" class="repo-select" onchange="loadRepositorio()">
+                                        <option value="">Todos</option>
+                                    </select>
                                 </div>
                                 <!-- Botones -->
                                 <div style="display:flex;gap:6px;align-items:flex-end">
