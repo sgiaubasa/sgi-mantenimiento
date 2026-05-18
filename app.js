@@ -1575,16 +1575,55 @@ async function guardarCambioPeriod() {
 }
 
 // ─── Repositorio de verificaciones ───────────────────────────────────────────
+// Debounce para búsqueda de texto en repositorio
+let _repoDebounceTimer = null
+function debounceRepo() {
+  clearTimeout(_repoDebounceTimer)
+  _repoDebounceTimer = setTimeout(() => loadRepositorio(), 500)
+}
+
+function limpiarFiltrosRepo() {
+  const ids = ['repo-estacion','repo-desde','repo-hasta','repo-tipo','repo-fallas','repo-texto']
+  ids.forEach(id => { const el = document.getElementById(id); if (el) el.value = '' })
+  loadRepositorio()
+}
+
 async function loadRepositorio() {
-  const lista    = document.getElementById('repo-lista')
-  const estacion = document.getElementById('repo-estacion')?.value || ''
+  const lista = document.getElementById('repo-lista')
+  const badge = document.getElementById('repo-badge')
   if (!lista) return
   lista.innerHTML = '<p class="empty-state">Cargando...</p>'
+  if (badge) badge.textContent = ''
+
+  const estacion = document.getElementById('repo-estacion')?.value || ''
+  const desde    = document.getElementById('repo-desde')?.value   || ''
+  const hasta    = document.getElementById('repo-hasta')?.value   || ''
+  const tipo     = document.getElementById('repo-tipo')?.value    || ''
+  const fallas   = document.getElementById('repo-fallas')?.value  || ''
+  const texto    = document.getElementById('repo-texto')?.value?.trim() || ''
+
+  const params = new URLSearchParams()
+  if (estacion) params.set('estacion', estacion)
+  if (desde)    params.set('desde', desde)
+  if (hasta)    params.set('hasta', hasta)
+  if (tipo)     params.set('tipo', tipo)
+  if (fallas)   params.set('fallas', fallas)
+  if (texto)    params.set('texto', texto)
+
   try {
-    const inspecciones = await apiFetch('/inspecciones')
-    const filtradas = estacion ? inspecciones.filter(i => i.estacion === estacion) : inspecciones
-    if (!filtradas.length) {
-      lista.innerHTML = '<div class="empty-state-card"><span style="font-size:2rem">📂</span><p>No hay verificaciones registradas.</p></div>'
+    const qs = params.toString()
+    const inspecciones = await apiFetch('/inspecciones' + (qs ? '?' + qs : ''))
+
+    // Badge de resultados
+    const hayFiltros = estacion || desde || hasta || tipo || fallas || texto
+    if (badge) {
+      badge.textContent = hayFiltros
+        ? `${inspecciones.length} resultado${inspecciones.length !== 1 ? 's' : ''} con los filtros aplicados`
+        : `${inspecciones.length} verificaciones más recientes`
+    }
+
+    if (!inspecciones.length) {
+      lista.innerHTML = '<div class="empty-state-card"><span style="font-size:2rem">📂</span><p>No hay verificaciones que coincidan con los filtros.</p></div>'
       return
     }
     lista.innerHTML = `<table class="tabla-plan" style="width:100%">
@@ -1599,7 +1638,7 @@ async function loadRepositorio() {
         </tr>
       </thead>
       <tbody>
-        ${filtradas.map(i => {
+        ${inspecciones.map(i => {
           const fecha = formatDate(i.fecha || i.createdAt)
           const tipo  = i.archivoNombre === 'Verificación manual' ? '✏ Manual' : '🤖 IA'
           const fallas = i.tieneFallas
@@ -1618,9 +1657,9 @@ async function loadRepositorio() {
             : ''
           return `<tr>
             <td style="white-space:nowrap">${fecha}</td>
-            <td>${i.estacion}</td>
+            <td>${escHtml(i.estacion)}</td>
             <td style="white-space:nowrap">${tipo}</td>
-            <td style="font-size:12px;color:var(--text-secondary)">${tareas || '—'}</td>
+            <td style="font-size:12px;color:var(--text-secondary)">${escHtml(tareas) || '—'}</td>
             <td style="text-align:center">${fallas}</td>
             <td style="text-align:center;display:flex;gap:6px;justify-content:center;align-items:center">${evidenciaBtn}${editBtn}${elimBtn}</td>
           </tr>`

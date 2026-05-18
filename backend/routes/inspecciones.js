@@ -479,9 +479,46 @@ router.get('/:id/evidencia', authMW, async (req, res) => {
 // ─── GET / ───────────────────────────────────────────────────────────────────
 router.get('/', async (req, res) => {
   try {
-    const inspecciones = await Inspeccion.find()
-      .sort({ createdAt: -1 })
-      .limit(50)
+    const { estacion, desde, hasta, tipo, fallas, equipo, texto } = req.query
+    const filter = {}
+
+    if (estacion) filter.estacion = estacion
+
+    // Rango de fechas por campo fecha (igual que KPIs)
+    if (desde || hasta) {
+      filter.fecha = {}
+      if (desde) filter.fecha.$gte = parseDate(desde)
+      if (hasta) {
+        // hasta inclusive: llegar al fin del día
+        const h = parseDate(hasta)
+        h.setHours(23, 59, 59, 999)
+        filter.fecha.$lte = h
+      }
+    }
+
+    // Tipo: 'manual' → archivoNombre = 'Verificación manual', 'ia' → el resto
+    if (tipo === 'manual') filter.archivoNombre = 'Verificación manual'
+    else if (tipo === 'ia') filter.archivoNombre = { $ne: 'Verificación manual' }
+
+    // Fallas
+    if (fallas === 'si') filter.tieneFallas = true
+    else if (fallas === 'no') filter.tieneFallas = false
+
+    // Búsqueda por equipo o texto libre (busca en tareasVerificadas, observacionesGenerales, equipos.codigo)
+    if (texto) {
+      const re = new RegExp(texto, 'i')
+      filter.$or = [
+        { 'equipos.codigo': re },
+        { 'equipos.descripcion': re },
+        { tareasVerificadas: re },
+        { observacionesGenerales: re },
+        { operador: re }
+      ]
+    }
+
+    const inspecciones = await Inspeccion.find(filter)
+      .sort({ fecha: -1, createdAt: -1 })
+      .limit(100)
       .select('-evidenciaData -evidencias.data')
       .populate('desviosGenerados', 'estado codigoEquipo')
     res.json(inspecciones)

@@ -464,25 +464,71 @@
             <div id="view-repositorio" class="view-section" style="display:none;">
                 <section class="form-section">
                     <div class="chart-card full-width">
-                        <div class="desvios-list-header">
-                            <div>
-                                <h3 class="chart-title">Repositorio de Verificaciones</h3>
-                                <p class="section-desc" style="margin:4px 0 0">Historial de inspecciones con evidencia adjunta para auditoría.</p>
-                            </div>
-                            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-                                <select id="repo-estacion" style="font-size:13px;padding:6px 10px;border-radius:8px;border:1px solid #E0E5F2;background:var(--bg-color)" onchange="loadRepositorio()">
-                                    <option value="">Todas las estaciones</option>
-                                    <option value="Berazategui">Berazategui</option>
-                                    <option value="Bernal">Bernal</option>
-                                    <option value="Dock Sud">Dock Sud</option>
-                                    <option value="Hudson">Hudson</option>
-                                    <option value="Quilmes">Quilmes</option>
-                                    <option value="Samborombón">Samborombón</option>
-                                </select>
-                                <button class="btn-secondary btn-sm" onclick="loadRepositorio()">↺ Actualizar</button>
-                            </div>
+                        <div style="margin-bottom:16px">
+                            <h3 class="chart-title">Repositorio de Verificaciones</h3>
+                            <p class="section-desc" style="margin:4px 0 0">Historial de inspecciones con evidencia adjunta para auditoría.</p>
                         </div>
-                        <div id="repo-lista" style="margin-top:12px">
+
+                        <!-- Filtros -->
+                        <div id="repo-filtros" style="background:var(--bg-color);border:1px solid #E0E5F2;border-radius:10px;padding:14px 16px;margin-bottom:14px">
+                            <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
+                                <!-- Estación -->
+                                <div style="display:flex;flex-direction:column;gap:4px;min-width:140px">
+                                    <label style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px">Estación</label>
+                                    <select id="repo-estacion" class="repo-select" onchange="loadRepositorio()">
+                                        <option value="">Todas</option>
+                                        <option value="Berazategui">Berazategui</option>
+                                        <option value="Bernal">Bernal</option>
+                                        <option value="Dock Sud">Dock Sud</option>
+                                        <option value="Hudson">Hudson</option>
+                                        <option value="Quilmes">Quilmes</option>
+                                        <option value="Samborombón">Samborombón</option>
+                                    </select>
+                                </div>
+                                <!-- Desde -->
+                                <div style="display:flex;flex-direction:column;gap:4px">
+                                    <label style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px">Desde</label>
+                                    <input type="date" id="repo-desde" class="repo-select" onchange="loadRepositorio()">
+                                </div>
+                                <!-- Hasta -->
+                                <div style="display:flex;flex-direction:column;gap:4px">
+                                    <label style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px">Hasta</label>
+                                    <input type="date" id="repo-hasta" class="repo-select" onchange="loadRepositorio()">
+                                </div>
+                                <!-- Tipo -->
+                                <div style="display:flex;flex-direction:column;gap:4px">
+                                    <label style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px">Tipo</label>
+                                    <select id="repo-tipo" class="repo-select" onchange="loadRepositorio()">
+                                        <option value="">Todos</option>
+                                        <option value="manual">✏ Manual</option>
+                                        <option value="ia">🤖 IA</option>
+                                    </select>
+                                </div>
+                                <!-- Fallas -->
+                                <div style="display:flex;flex-direction:column;gap:4px">
+                                    <label style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px">Fallas</label>
+                                    <select id="repo-fallas" class="repo-select" onchange="loadRepositorio()">
+                                        <option value="">Todos</option>
+                                        <option value="si">Con fallas</option>
+                                        <option value="no">Sin fallas</option>
+                                    </select>
+                                </div>
+                                <!-- Texto libre -->
+                                <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:160px">
+                                    <label style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px">Buscar (equipo, tarea, operador…)</label>
+                                    <input type="text" id="repo-texto" class="repo-select" placeholder="Ej: CC 01, Luminarias, Juan…" oninput="debounceRepo()">
+                                </div>
+                                <!-- Botones -->
+                                <div style="display:flex;gap:6px;align-items:flex-end">
+                                    <button class="btn-primary btn-sm" onclick="loadRepositorio()">🔍 Buscar</button>
+                                    <button class="btn-secondary btn-sm" onclick="limpiarFiltrosRepo()">✕ Limpiar</button>
+                                </div>
+                            </div>
+                            <!-- Badge de resultados -->
+                            <div id="repo-badge" style="margin-top:8px;font-size:12px;color:var(--text-secondary)"></div>
+                        </div>
+
+                        <div id="repo-lista">
                             <p class="empty-state">Cargando...</p>
                         </div>
                     </div>
