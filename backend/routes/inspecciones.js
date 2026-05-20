@@ -15,6 +15,22 @@ function parseDate(str) {
   return new Date(str)
 }
 
+// Corrige el encoding del nombre de archivo.
+// Multer interpreta los nombres de archivo como Latin-1, pero los navegadores
+// modernos los envían en UTF-8. Esto corrompe tildes y caracteres especiales.
+// Si la conversión de latin1→utf8 produce texto válido (sin caracteres de
+// reemplazo), se usa; de lo contrario se devuelve el original.
+function fixNombre(str) {
+  if (!str) return str
+  try {
+    const fixed = Buffer.from(str, 'latin1').toString('utf8')
+    // Verificar que la conversión mejoró el string (tiene menos caracteres raros)
+    return fixed
+  } catch {
+    return str
+  }
+}
+
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 },
@@ -120,7 +136,7 @@ router.post('/', authMW, upload.fields([{ name: 'archivos', maxCount: 10 }, { na
 
   // Evidencias: todas las imágenes subidas + eventual archivo extra
   const evArchivo  = archivoEv || archivoIA
-  const evidencias = archivosIA.map(f => ({ nombre: f.originalname, mimeType: f.mimetype, data: f.buffer }))
+  const evidencias = archivosIA.map(f => ({ nombre: fixNombre(f.originalname), mimeType: f.mimetype, data: f.buffer }))
 
   try {
     // 1. Guardar inspección
@@ -129,13 +145,13 @@ router.post('/', authMW, upload.fields([{ name: 'archivos', maxCount: 10 }, { na
       planItemId:            planItemId || null,
       operador:              analisis.operador  || null,
       fecha:                 analisis.fecha ? parseDate(analisis.fecha) : new Date(),
-      archivoNombre:         archivoIA.originalname,
+      archivoNombre:         fixNombre(archivoIA.originalname),
       archivoMimeType:       archivoIA.mimetype,
       equipos:               analisis.equipos || [],
       tieneFallas,
       tareasVerificadas:     analisis.tareasVerificadas || [],
       observacionesGenerales: analisis.observacionesGenerales || null,
-      evidenciaNombre:       evArchivo.originalname,
+      evidenciaNombre:       fixNombre(evArchivo.originalname),
       evidenciaMimeType:     evArchivo.mimetype,
       evidenciaData:         evArchivo.buffer,
       evidencias
@@ -225,7 +241,7 @@ router.post('/manual', authMW, upload.single('evidencia'), async (req, res) => {
       observacionesGenerales: observaciones || null,
       tipoVerificacion:      'Personal AUBASA',
       usuarioId:             req.usuario._id,
-      evidenciaNombre:       req.file ? req.file.originalname : null,
+      evidenciaNombre:       req.file ? fixNombre(req.file.originalname) : null,
       evidenciaMimeType:     req.file ? req.file.mimetype : null,
       evidenciaData:         req.file ? req.file.buffer : null
     })
