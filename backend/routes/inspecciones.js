@@ -532,15 +532,20 @@ router.get('/', async (req, res) => {
     if (fallas === 'si') filter.tieneFallas = true
     else if (fallas === 'no') filter.tieneFallas = false
 
-    // Filtro por prefijo de tipo de equipo
-    // Busca por equipos.codigo (ej: "CC 01") O por planItemId (para inspecciones manuales con planItemId correcto)
+    // Filtro por prefijo de tipo de equipo.
+    // Prioridad: si la inspección tiene planItemId, se filtra solo por eso (es la fuente de verdad).
+    // Si no tiene planItemId (registros legacy), se filtra por el prefijo del código de equipo.
+    // Así una inspección no aparece en dos tipos distintos.
     if (prefix) {
-      const safePrefix = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      const safePrefix   = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
       const itemsDelTipo = await ItemPlan.find({ codigoPrefix: new RegExp('^' + safePrefix + '$', 'i') }).select('_id').lean()
       const planItemIds  = itemsDelTipo.map(i => i._id)
       filter.$or = [
-        { 'equipos.codigo': new RegExp('^' + safePrefix, 'i') },
-        ...(planItemIds.length ? [{ planItemId: { $in: planItemIds } }] : [])
+        // Inspecciones con planItemId correcto (Manual nuevo o editado)
+        ...(planItemIds.length ? [{ planItemId: { $in: planItemIds } }] : []),
+        // Inspecciones legacy sin planItemId → usar código de equipo
+        { planItemId: null,             'equipos.codigo': new RegExp('^' + safePrefix, 'i') },
+        { planItemId: { $exists: false }, 'equipos.codigo': new RegExp('^' + safePrefix, 'i') }
       ]
     }
 
