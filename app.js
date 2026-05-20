@@ -153,6 +153,11 @@ const viewMeta = {
     subtitle: 'Historial de inspecciones con evidencia para auditoría',
     onEnter: () => loadRepositorio()
   },
+  'view-detalle-cumpl': {
+    title: 'Detalle de Cumplimiento',
+    subtitle: 'Programado vs. realizado por tipo de equipo, mes a mes',
+    onEnter: () => loadDetalleCumpl()
+  },
   'view-desvios': {
     title: 'Desvíos Pendientes',
     subtitle: 'Bandeja de gestión y cierre de desvíos abiertos',
@@ -1689,6 +1694,127 @@ async function loadRepositorio() {
     </table>`
   } catch (err) {
     lista.innerHTML = `<p class="empty-state" style="color:var(--danger-color)">Error: ${err.message}</p>`
+  }
+}
+
+// ─── Detalle de Cumplimiento ──────────────────────────────────────────────────
+let _dcExpandidos = new Set()  // meses expandidos
+let _dcTodoExpandido = false
+
+function toggleTodoDetalle() {
+  _dcTodoExpandido = !_dcTodoExpandido
+  document.querySelectorAll('.dc-detalle-rows').forEach(el => {
+    el.style.display = _dcTodoExpandido ? '' : 'none'
+  })
+  document.querySelectorAll('.dc-mes-toggle').forEach(el => {
+    el.textContent = _dcTodoExpandido ? '▲' : '▶'
+  })
+  const btn = document.querySelector('[onclick="toggleTodoDetalle()"]')
+  if (btn) btn.textContent = _dcTodoExpandido ? '⊟ Colapsar todo' : '⊞ Expandir todo'
+}
+
+function toggleDetalleMes(mesIdx) {
+  const rows = document.getElementById(`dc-rows-${mesIdx}`)
+  const icon = document.getElementById(`dc-icon-${mesIdx}`)
+  if (!rows) return
+  const visible = rows.style.display !== 'none'
+  rows.style.display = visible ? 'none' : ''
+  if (icon) icon.textContent = visible ? '▶' : '▲'
+}
+
+function colorPct(p) {
+  if (p === null || p === undefined) return 'var(--text-secondary)'
+  if (p >= 90) return 'var(--success-color)'
+  if (p >= 70) return '#F59E0B'
+  return 'var(--danger-color)'
+}
+
+async function loadDetalleCumpl() {
+  const contenedor = document.getElementById('dc-lista')
+  if (!contenedor) return
+  contenedor.innerHTML = '<p class="empty-state">Cargando...</p>'
+  _dcExpandidos.clear()
+
+  const estacion = document.getElementById('dc-estacion')?.value || ''
+  const anio     = document.getElementById('dc-anio')?.value    || new Date().getFullYear()
+
+  const params = new URLSearchParams({ anio })
+  if (estacion) params.set('estacion', estacion)
+
+  try {
+    const { resultado } = await apiFetch('/plan/cumplimiento/detalle?' + params)
+    if (!resultado?.length) {
+      contenedor.innerHTML = '<div class="empty-state-card"><span style="font-size:2rem">📊</span><p>No hay datos para los filtros seleccionados.</p></div>'
+      return
+    }
+
+    const MESES_LABEL = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
+    const mesActual   = new Date().getMonth()
+
+    let html = `<table class="tabla-plan" style="width:100%;border-collapse:collapse">
+      <thead>
+        <tr>
+          <th style="width:180px">Mes / Tipo de equipo</th>
+          <th style="text-align:right">Programado</th>
+          <th style="text-align:right">Realizado</th>
+          <th style="text-align:right;width:80px">%</th>
+          <th style="width:160px">Avance</th>
+        </tr>
+      </thead>
+      <tbody>`
+
+    for (const fila of resultado) {
+      const { mesIdx, planificado, ejecutado, porcentaje, detalle } = fila
+      const label       = MESES_LABEL[mesIdx]
+      const esMesActual = mesIdx === mesActual && Number(anio) === new Date().getFullYear()
+      const pctColor    = colorPct(porcentaje)
+      const pct         = porcentaje !== null ? `${porcentaje}%` : '—'
+      const barra       = porcentaje !== null
+        ? `<div style="background:#E5E7EB;border-radius:4px;height:8px;overflow:hidden"><div style="background:${pctColor};height:100%;width:${Math.min(porcentaje,100)}%;transition:width .3s"></div></div>`
+        : ''
+
+      // Fila resumen del mes (clickeable)
+      html += `<tr style="background:${esMesActual ? '#EEF2FF' : '#F8FAFC'};cursor:pointer;border-top:2px solid #E0E5F2" onclick="toggleDetalleMes(${mesIdx})">
+        <td style="padding:10px 12px;font-weight:700;color:var(--text-primary)">
+          <span id="dc-icon-${mesIdx}" class="dc-mes-toggle" style="margin-right:8px;font-size:11px;color:var(--primary-color)">▶</span>
+          ${label}${esMesActual ? ' <span style="font-size:10px;background:var(--primary-color);color:#fff;padding:2px 6px;border-radius:10px;font-weight:600">HOY</span>' : ''}
+        </td>
+        <td style="text-align:right;padding:10px 12px;font-weight:600">${planificado.toLocaleString('es-AR')}</td>
+        <td style="text-align:right;padding:10px 12px;font-weight:600">${ejecutado.toLocaleString('es-AR')}</td>
+        <td style="text-align:right;padding:10px 12px;font-weight:700;color:${pctColor}">${pct}</td>
+        <td style="padding:10px 12px">${barra}</td>
+      </tr>`
+
+      // Filas de detalle por tipo (ocultas por defecto)
+      html += `<tbody id="dc-rows-${mesIdx}" class="dc-detalle-rows" style="display:none">`
+      if (detalle.length) {
+        for (const d of detalle) {
+          const dpct      = `${d.porcentaje}%`
+          const dColor    = colorPct(d.porcentaje)
+          const dBarra    = `<div style="background:#E5E7EB;border-radius:4px;height:6px;overflow:hidden"><div style="background:${dColor};height:100%;width:${Math.min(d.porcentaje,100)}%"></div></div>`
+          const badge     = d.codigoPrefix ? `<span style="font-size:10px;font-weight:700;color:var(--primary-color);background:#EEF2FF;padding:2px 6px;border-radius:6px;margin-left:6px">${d.codigoPrefix}</span>` : ''
+          html += `<tr style="background:#fff;border-top:1px solid #F1F5F9">
+            <td style="padding:8px 12px 8px 36px;font-size:13px;color:var(--text-primary)">${escHtml(d.equipo)}${badge}</td>
+            <td style="text-align:right;padding:8px 12px;font-size:13px;color:var(--text-secondary)">${d.planificado.toLocaleString('es-AR')}</td>
+            <td style="text-align:right;padding:8px 12px;font-size:13px;color:var(--text-secondary)">${d.ejecutado.toLocaleString('es-AR')}</td>
+            <td style="text-align:right;padding:8px 12px;font-size:13px;font-weight:600;color:${dColor}">${dpct}</td>
+            <td style="padding:8px 12px">${dBarra}</td>
+          </tr>`
+        }
+      } else {
+        html += `<tr style="background:#fff"><td colspan="5" style="padding:8px 12px 8px 36px;font-size:12px;color:var(--text-secondary)">Sin ítems planificados para este mes.</td></tr>`
+      }
+      html += '</tbody>'
+    }
+
+    html += '</tbody></table>'
+    contenedor.innerHTML = html
+
+    // Expandir el mes actual por defecto
+    toggleDetalleMes(mesActual)
+
+  } catch (err) {
+    contenedor.innerHTML = `<p class="empty-state" style="color:var(--danger-color)">Error: ${err.message}</p>`
   }
 }
 

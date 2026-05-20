@@ -123,6 +123,107 @@ router.get('/cumplimiento', authMW, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
+// ─── GET /plan/cumplimiento/detalle ──────────────────────────────────────────
+// Desglose mensual por tipo de equipo: programado vs. realizado
+router.get('/cumplimiento/detalle', authMW, async (req, res) => {
+  try {
+    const anio     = Number(req.query.anio) || new Date().getFullYear()
+    const estacion = req.query.estacion
+
+    const filtro = { anio, activo: true }
+    if (estacion) filtro.estacion = estacion
+    const items = await ItemPlan.find(filtro).lean()
+    if (!items.length) return res.json({ resultado: [] })
+
+    // Inspecciones del año filtradas por fecha de verificación
+    const desde      = new Date(anio, 0, 1)
+    const hasta      = new Date(anio + 1, 0, 1)
+    const filtroInsp = { fecha: { $gte: desde, $lt: hasta } }
+    if (estacion) filtroInsp.estacion = estacion
+    const inspecciones = await Inspeccion.find(filtroInsp)
+      .select('equipos tareasVerificadas fecha planItemId')
+      .lean()
+
+    // Mismos mapas que /cumplimiento
+    const ejecutadoPorItemId = {}
+    const ejecutadoPorPrefix = {}
+    for (const insp of inspecciones) {
+      const mes         = MESES[new Date(insp.fecha).getMonth()]
+      const tareasCount = Math.max((insp.tareasVerificadas || []).length, 1)
+      if (insp.planItemId) {
+        if (!ejecutadoPorItemId[mes]) ejecutadoPorItemId[mes] = {}
+        const pid   = insp.planItemId.toString()
+        const units = Math.max((insp.equipos || []).length, 1)
+        ejecutadoPorItemId[mes][pid] = (ejecutadoPorItemId[mes][pid] || 0) + (units * tareasCount)
+      } else {
+        if (!ejecutadoPorPrefix[mes]) ejecutadoPorPrefix[mes] = {}
+        const unidadesPorPrefix = {}
+        for (const eq of (insp.equipos || [])) {
+          const prefix = (eq.codigo || '').replace(/[-\s\d].*/, '').toUpperCase()
+          if (prefix) unidadesPorPrefix[prefix] = (unidadesPorPrefix[prefix] || 0) + 1
+        }
+        for (const [prefix, unidades] of Object.entries(unidadesPorPrefix)) {
+          ejecutadoPorPrefix[mes][prefix] = (ejecutadoPorPrefix[mes][prefix] || 0) + (unidades * tareasCount)
+        }
+      }
+    }
+
+    const resultado = MESES.map((mes, mesIdx) => {
+      const primerDia = new Date(anio, mesIdx, 1)
+      const ultimoDia = new Date(anio, mesIdx + 1, 0)
+
+      // Ítems vigentes en este mes
+      const itemsMes = items.filter(item => {
+        if (!(item.tareas?.length)) return false
+        const vigDesde = item.vigenciaDesde ? new Date(item.vigenciaDesde) : new Date(anio, 0, 1)
+        const vigHasta = item.vigenciaHasta ? new Date(item.vigenciaHasta) : null
+        return vigDesde <= ultimoDia && (vigHasta === null || vigHasta >= primerDia)
+      })
+
+      // Agrupar por equipo+prefix
+      const tiposDelMes = {}
+      for (const item of itemsMes) {
+        const key  = `${item.equipo}||${item.codigoPrefix || ''}`
+        if (!tiposDelMes[key]) tiposDelMes[key] = { equipo: item.equipo, codigoPrefix: item.codigoPrefix || '', planificado: 0, ejecutado: 0 }
+        const tipo = tiposDelMes[key]
+
+        const frec = frecuenciaMensual(item.periodicidad, mesIdx, anio, item.mesInicio || 0)
+        if (frec === 0) continue
+        const cantUnidades = item.unidades?.length || 1
+        const cantTareas   = item.tareas.length
+        tipo.planificado += frec * cantUnidades * cantTareas
+
+        const byId     = ejecutadoPorItemId[mes]?.[item._id.toString()] || 0
+        const byPrefix = item.codigoPrefix
+          ? (ejecutadoPorPrefix[mes]?.[item.codigoPrefix.toUpperCase()] || 0)
+          : 0
+        tipo.ejecutado += byId + byPrefix
+      }
+
+      const detalle = Object.values(tiposDelMes)
+        .filter(t => t.planificado > 0)
+        .map(t => {
+          const ejec = Math.min(t.ejecutado, t.planificado)
+          return { equipo: t.equipo, codigoPrefix: t.codigoPrefix, planificado: t.planificado, ejecutado: ejec, porcentaje: Math.round((ejec / t.planificado) * 100) }
+        })
+        .sort((a, b) => a.equipo.localeCompare(b.equipo))
+
+      const totalPlan = detalle.reduce((s, d) => s + d.planificado, 0)
+      const totalEjec = detalle.reduce((s, d) => s + d.ejecutado, 0)
+
+      return {
+        mes, mesIdx,
+        planificado: totalPlan,
+        ejecutado:   totalEjec,
+        porcentaje:  totalPlan > 0 ? Math.round((totalEjec / totalPlan) * 100) : null,
+        detalle
+      }
+    })
+
+    res.json({ resultado })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
 // ─── POST /plan ───────────────────────────────────────────────────────────────
 router.post('/', authMW, async (req, res) => {
   if (req.usuario.rol !== 'admin') return res.status(403).json({ error: 'Solo administradores' })
