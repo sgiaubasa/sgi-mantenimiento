@@ -216,6 +216,7 @@ router.post('/manual', authMW, upload.single('evidencia'), async (req, res) => {
 
     const insp = await Inspeccion.create({
       estacion:              item.estacion,
+      planItemId:            itemPlanId,
       fecha:                 fecha ? parseDate(fecha) : new Date(),
       archivoNombre:         'Verificación manual',
       equipos,
@@ -399,6 +400,19 @@ router.get('/kpis', authMW, async (req, res) => {
 
 // ─── PUT /:id ─── edición de inspección (solo admin) ─────────────────────────
 // Body: { fecha?, observacionesGenerales?, desviosNuevos[] }
+// ─── GET /:id ─────────────────────────────────────────────────────────────────
+router.get('/:id', authMW, async (req, res) => {
+  try {
+    const insp = await Inspeccion.findById(req.params.id)
+      .select('-evidenciaData -evidencias.data')
+      .populate('desviosGenerados', 'estado codigoEquipo')
+    if (!insp) return res.status(404).json({ error: 'Inspección no encontrada' })
+    res.json(insp)
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
 router.put('/:id', authMW, async (req, res) => {
   if (req.usuario.rol !== 'admin') return res.status(403).json({ error: 'Solo administradores' })
   try {
@@ -409,7 +423,21 @@ router.put('/:id', authMW, async (req, res) => {
 
     if (fecha)                               insp.fecha = parseDate(fecha)
     if (observacionesGenerales !== undefined) insp.observacionesGenerales = observacionesGenerales || null
-    if (planItemId !== undefined)             insp.planItemId = planItemId || null
+
+    // Si cambia el planItemId, actualizar también estacion y descripcion de equipos
+    if (planItemId !== undefined) {
+      insp.planItemId = planItemId || null
+      if (planItemId) {
+        const item = await ItemPlan.findById(planItemId).lean()
+        if (item) {
+          insp.estacion = item.estacion
+          // Actualizar descripcion de los equipos para reflejar el tipo correcto
+          if (insp.equipos?.length) {
+            insp.equipos = insp.equipos.map(eq => ({ ...eq.toObject(), descripcion: item.equipo }))
+          }
+        }
+      }
+    }
 
     // Agregar nuevos desvíos
     const idsNuevos = []
@@ -504,9 +532,16 @@ router.get('/', async (req, res) => {
     if (fallas === 'si') filter.tieneFallas = true
     else if (fallas === 'no') filter.tieneFallas = false
 
-    // Filtro por prefijo de tipo de equipo (ej: "CC" → busca equipos.codigo que empieza con CC)
+    // Filtro por prefijo de tipo de equipo
+    // Busca por equipos.codigo (ej: "CC 01") O por planItemId (para inspecciones manuales con planItemId correcto)
     if (prefix) {
-      filter['equipos.codigo'] = new RegExp('^' + prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')
+      const safePrefix = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      const itemsDelTipo = await ItemPlan.find({ codigoPrefix: new RegExp('^' + safePrefix + '$', 'i') }).select('_id').lean()
+      const planItemIds  = itemsDelTipo.map(i => i._id)
+      filter.$or = [
+        { 'equipos.codigo': new RegExp('^' + safePrefix, 'i') },
+        ...(planItemIds.length ? [{ planItemId: { $in: planItemIds } }] : [])
+      ]
     }
 
     const inspecciones = await Inspeccion.find(filter)

@@ -1315,19 +1315,19 @@ async function cargarEquiposManual() {
     planItemsCacheManual = []
   }
 
-  const itemsConTareas = planItemsCacheManual.filter(i => i.tareas?.length > 0)
-  sel.innerHTML = itemsConTareas.length
+  // Mostrar todos los ítems del plan, con o sin tareas configuradas
+  sel.innerHTML = planItemsCacheManual.length
     ? '<option value="">Seleccioná un equipo...</option>'
     : '<option value="">Sin equipos configurados para esta estación</option>'
 
-  for (const item of itemsConTareas) {
+  for (const item of planItemsCacheManual) {
     const opt = document.createElement('option')
     opt.value = item._id
     opt.textContent = `${item.equipo}${item.codigoPrefix ? ' (' + item.codigoPrefix + ')' : ''} — ${PERIOD_LABEL[item.periodicidad] || item.periodicidad}`
     sel.appendChild(opt)
   }
 
-  sel.disabled = itemsConTareas.length === 0
+  sel.disabled = planItemsCacheManual.length === 0
   // Resetear selección de unidades/tareas al cambiar estación
   document.getElementById('manual-unidades-group').style.display = 'none'
   document.getElementById('manual-tareas-group').style.display   = 'none'
@@ -1736,10 +1736,9 @@ let _desvioEditCount = 0
 
 async function abrirModalEditarInsp(id) {
   try {
-    // Buscar la inspección en la lista ya cargada (o hacer fetch)
-    const inspecciones = await apiFetch('/inspecciones')
-    const insp = inspecciones.find(i => i._id === id)
-    if (!insp) { showNotification('Inspección no encontrada.', 'error'); return }
+    // Obtener la inspección puntual por ID (no depende del listado paginado)
+    const insp = await apiFetch(`/inspecciones/${id}`)
+    if (!insp?._id) { showNotification('Inspección no encontrada.', 'error'); return }
     _inspEditCache = insp
     _desvioEditCount = 0
 
