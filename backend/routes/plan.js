@@ -52,6 +52,14 @@ router.get('/cumplimiento', authMW, async (req, res) => {
 
     if (!items.length) return res.json({ resultado: [], items: [] })
 
+    // Lookup de TODOS los ítems (incluyendo eliminados/inactivos) para manejar
+    // planItemIds huérfanos: si una inspección apunta a un ítem que fue eliminado,
+    // igual la contamos mediante su prefix.
+    const todosItems = await ItemPlan.find(estacion ? { estacion } : {}).select('_id codigoPrefix').lean()
+    const planItemPrefixLookup = {}
+    for (const v of todosItems) planItemPrefixLookup[v._id.toString()] = (v.codigoPrefix || '').toUpperCase()
+    const activeIds = new Set(items.map(i => i._id.toString()))
+
     // Inspecciones del año filtradas por fecha de verificación (campo fecha, no createdAt)
     const desde      = new Date(anio, 0, 1)
     const hasta      = new Date(anio + 1, 0, 1)
@@ -61,20 +69,31 @@ router.get('/cumplimiento', authMW, async (req, res) => {
       .select('equipos tareasVerificadas fecha planItemId')
       .lean()
 
-    // Dos mapas: por planItemId (directo) y por prefix (legacy/sin planItemId)
+    // Dos mapas: por planItemId (ítems activos) y por prefix (legacy + huérfanos)
     const ejecutadoPorItemId = {}
     const ejecutadoPorPrefix = {}
 
     for (const insp of inspecciones) {
       const mes         = MESES[new Date(insp.fecha).getMonth()]
       const tareasCount = Math.max((insp.tareasVerificadas || []).length, 1)
+      const units       = Math.max((insp.equipos || []).length, 1)
 
       if (insp.planItemId) {
-        if (!ejecutadoPorItemId[mes]) ejecutadoPorItemId[mes] = {}
-        const pid   = insp.planItemId.toString()
-        const units = Math.max((insp.equipos || []).length, 1)
-        ejecutadoPorItemId[mes][pid] = (ejecutadoPorItemId[mes][pid] || 0) + (units * tareasCount)
+        const pid = insp.planItemId.toString()
+        if (activeIds.has(pid)) {
+          // Ítem activo → contar por ID (más preciso)
+          if (!ejecutadoPorItemId[mes]) ejecutadoPorItemId[mes] = {}
+          ejecutadoPorItemId[mes][pid] = (ejecutadoPorItemId[mes][pid] || 0) + (units * tareasCount)
+        } else {
+          // planItemId huérfano (ítem eliminado/inactivo) → caer al bucket de prefix
+          const prefix = planItemPrefixLookup[pid]
+          if (prefix) {
+            if (!ejecutadoPorPrefix[mes]) ejecutadoPorPrefix[mes] = {}
+            ejecutadoPorPrefix[mes][prefix] = (ejecutadoPorPrefix[mes][prefix] || 0) + (units * tareasCount)
+          }
+        }
       } else {
+        // Legacy sin planItemId → extraer prefix del código de equipo
         if (!ejecutadoPorPrefix[mes]) ejecutadoPorPrefix[mes] = {}
         const unidadesPorPrefix = {}
         for (const eq of (insp.equipos || [])) {
@@ -99,13 +118,14 @@ router.get('/cumplimiento', authMW, async (req, res) => {
         return vigDesde <= ultimoDia && (vigHasta === null || vigHasta >= primerDia)
       })
 
-      let planificado = 0, ejecutado = 0
-      // Rastrear prefijos ya sumados: evita doble conteo cuando hay dos versiones
-      // del mismo ítem vigentes en el mismo mes (cambio de periodicidad a mitad de mes)
+      // Acumular por tipo (prefix) para aplicar el cap a nivel tipo, no por ítem individual.
+      // Esto evita que el excedente de una versión sea "desperdiciado" cuando hay cambio
+      // de periodicidad a mitad de mes.
+      const tiposPlan  = {}
+      const tiposEjec  = {}
       const prefixContado = new Set()
 
       for (const item of itemsMes) {
-        // Días activos reales dentro de este mes según vigencia
         const vigDesde = item.vigenciaDesde ? new Date(item.vigenciaDesde) : new Date(anio, 0, 1)
         const vigHasta = item.vigenciaHasta ? new Date(item.vigenciaHasta) : ultimoDia
         const diaInicio   = vigDesde > primerDia ? vigDesde.getDate() : 1
@@ -118,23 +138,29 @@ router.get('/cumplimiento', authMW, async (req, res) => {
         const cantUnidades = item.unidades?.length || 1
         const cantTareas   = item.tareas.length
         const planItem     = frec * cantUnidades * cantTareas
-        planificado += planItem
+        const prefixKey    = (item.codigoPrefix || '_').toUpperCase()
 
-        const byId = ejecutadoPorItemId[mes]?.[item._id.toString()] || 0
+        tiposPlan[prefixKey] = (tiposPlan[prefixKey] || 0) + planItem
+        if (!tiposEjec[prefixKey]) tiposEjec[prefixKey] = 0
 
-        // byPrefix solo se suma una vez por prefijo (evita doble conteo entre versiones)
-        const prefixKey = (item.codigoPrefix || '').toUpperCase()
-        let byPrefix = 0
+        // byId: inspecciones que apuntan directamente a esta versión del ítem
+        tiposEjec[prefixKey] += ejecutadoPorItemId[mes]?.[item._id.toString()] || 0
+
+        // byPrefix: solo una vez por prefix (incluye huérfanos + legacy)
         if (!prefixContado.has(prefixKey)) {
-          byPrefix = prefixKey ? (ejecutadoPorPrefix[mes]?.[prefixKey] || 0) : 0
+          tiposEjec[prefixKey] += ejecutadoPorPrefix[mes]?.[prefixKey] || 0
           prefixContado.add(prefixKey)
         }
-
-        ejecutado += Math.min(byId + byPrefix, planItem)
       }
 
-      const ejFinal = Math.min(ejecutado, planificado)
-      return { mes, planificado, ejecutado: ejFinal, porcentaje: planificado > 0 ? Math.round((ejFinal / planificado) * 100) : null }
+      // Cap a nivel tipo y sumar totales del mes
+      let planificado = 0, ejecutado = 0
+      for (const prefixKey of Object.keys(tiposPlan)) {
+        planificado += tiposPlan[prefixKey]
+        ejecutado   += Math.min(tiposEjec[prefixKey] || 0, tiposPlan[prefixKey])
+      }
+
+      return { mes, planificado, ejecutado, porcentaje: planificado > 0 ? Math.round((ejecutado / planificado) * 100) : null }
     })
 
     // Items vigentes para mostrar en la tabla
@@ -166,17 +192,31 @@ router.get('/cumplimiento/detalle', authMW, async (req, res) => {
       .select('equipos tareasVerificadas fecha planItemId')
       .lean()
 
-    // Mismos mapas que /cumplimiento
+    // Lookup de TODOS los ítems para manejar planItemIds huérfanos (igual que /cumplimiento)
+    const todosItemsDet = await ItemPlan.find(estacion ? { estacion } : {}).select('_id codigoPrefix').lean()
+    const planItemPrefixLookupDet = {}
+    for (const v of todosItemsDet) planItemPrefixLookupDet[v._id.toString()] = (v.codigoPrefix || '').toUpperCase()
+    const activeIdsDet = new Set(items.map(i => i._id.toString()))
+
     const ejecutadoPorItemId = {}
     const ejecutadoPorPrefix = {}
     for (const insp of inspecciones) {
       const mes         = MESES[new Date(insp.fecha).getMonth()]
       const tareasCount = Math.max((insp.tareasVerificadas || []).length, 1)
+      const units       = Math.max((insp.equipos || []).length, 1)
       if (insp.planItemId) {
-        if (!ejecutadoPorItemId[mes]) ejecutadoPorItemId[mes] = {}
-        const pid   = insp.planItemId.toString()
-        const units = Math.max((insp.equipos || []).length, 1)
-        ejecutadoPorItemId[mes][pid] = (ejecutadoPorItemId[mes][pid] || 0) + (units * tareasCount)
+        const pid = insp.planItemId.toString()
+        if (activeIdsDet.has(pid)) {
+          if (!ejecutadoPorItemId[mes]) ejecutadoPorItemId[mes] = {}
+          ejecutadoPorItemId[mes][pid] = (ejecutadoPorItemId[mes][pid] || 0) + (units * tareasCount)
+        } else {
+          // Huérfano → caer al prefix
+          const prefix = planItemPrefixLookupDet[pid]
+          if (prefix) {
+            if (!ejecutadoPorPrefix[mes]) ejecutadoPorPrefix[mes] = {}
+            ejecutadoPorPrefix[mes][prefix] = (ejecutadoPorPrefix[mes][prefix] || 0) + (units * tareasCount)
+          }
+        }
       } else {
         if (!ejecutadoPorPrefix[mes]) ejecutadoPorPrefix[mes] = {}
         const unidadesPorPrefix = {}
