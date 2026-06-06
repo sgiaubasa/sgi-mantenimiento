@@ -1503,6 +1503,13 @@ function abrirModalEditarPeriod(id) {
   const inputDate = document.getElementById('ep-desde')
   inputDate.value = ahora.toISOString().split('T')[0]
 
+  // Precargar fechas de vigencia actuales para corrección directa
+  const toLocalDate = d => d ? new Date(d).toISOString().split('T')[0] : ''
+  const inpVigDesde = document.getElementById('ep-vigencia-desde')
+  const inpVigHasta = document.getElementById('ep-vigencia-hasta')
+  if (inpVigDesde) inpVigDesde.value = toLocalDate(item.vigenciaDesde)
+  if (inpVigHasta) inpVigHasta.value = toLocalDate(item.vigenciaHasta)
+
   document.getElementById('ep-info').style.display = 'none'
   document.getElementById('ep-periodicidad').onchange = function () {
     actualizarInfoEditarPeriodEvt()
@@ -1569,15 +1576,32 @@ async function guardarCambioPeriod() {
   const aplicarDesde = document.getElementById('ep-desde').value
   const tareas       = _getChipValues('ep-tareas-chips')
   const unidades     = _getChipValues('ep-unidades-chips')
+  const vigDesde     = document.getElementById('ep-vigencia-desde')?.value || ''
+  const vigHasta     = document.getElementById('ep-vigencia-hasta')?.value || ''
+
+  // Verificar si las fechas de vigencia cambiaron respecto al item original
+  const itemOrig = (window._planItemsCache || {})[id]
+  const toLocalDate = d => d ? new Date(d).toISOString().split('T')[0] : ''
+  const vigDesdeOrig = toLocalDate(itemOrig?.vigenciaDesde)
+  const vigHastaOrig = toLocalDate(itemOrig?.vigenciaHasta)
+  const vigCambio = vigDesde !== vigDesdeOrig || vigHasta !== vigHastaOrig
 
   try {
-    // Siempre enviamos periodicidad + aplicarDesde para que el backend pueda
-    // corregir mesInicio aunque la periodicidad no haya cambiado
+    // 1. Si cambiaron las fechas de vigencia → aplicar corrección directa (PATCH)
+    if (vigCambio) {
+      await apiFetch(`/plan/${id}/vigencia`, {
+        method: 'PATCH',
+        body: JSON.stringify({ vigenciaDesde: vigDesde || null, vigenciaHasta: vigHasta || null })
+      })
+    }
+
+    // 2. Cambio de periodicidad + crear nueva versión si corresponde
     await apiFetch(`/plan/${id}`, {
       method: 'PUT',
       body: JSON.stringify({ periodicidad, aplicarDesde, tareas, unidades })
     })
-    showNotification('Cambios guardados.', 'success')
+
+    showNotification(vigCambio ? 'Fechas y periodicidad actualizadas.' : 'Cambios guardados.', 'success')
     cerrarModalEditarPeriod()
     loadCumplimiento()
   } catch (err) { showNotification('Error: ' + err.message, 'error') }
