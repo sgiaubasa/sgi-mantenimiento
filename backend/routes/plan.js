@@ -5,18 +5,25 @@ const Inspeccion = require('../models/Inspeccion')
 
 const MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre']
 
-function frecuenciaMensual(periodicidad, mes, anio, mesInicio = 0) {
-  const diasMes = new Date(anio, mes + 1, 0).getDate()
+// Calcula la frecuencia planificada para un ítem considerando SOLO los días
+// en que estuvo activo dentro del mes (soporta cambios de periodicidad a mitad de mes).
+// diasActivos: cantidad de días que el ítem estuvo vigente en ese mes.
+// diasMes: total de días del mes.
+function frecuenciaParcial(periodicidad, diasActivos, diasMes, mesIdx, mesInicio = 0) {
+  if (diasActivos <= 0) return 0
   switch (periodicidad) {
-    case 'diario':       return diasMes
-    case 'semanal':      return 4
-    case 'quincenal':    return 2
-    case 'mensual':      return 1
-    case 'bimestral':    return (mes - mesInicio + 12) % 2 === 0 ? 1 : 0
-    case 'trimestral':   return (mes - mesInicio + 12) % 3 === 0 ? 1 : 0
-    case 'semestral':    return (mes - mesInicio + 12) % 6 === 0 ? 1 : 0
-    case 'anual':        return mes === mesInicio ? 1 : 0
-    default:             return 0
+    case 'diario':     return diasActivos
+    case 'semanal':    return Math.round(diasActivos / 7)
+    case 'quincenal':  return Math.round(diasActivos / 15)
+    // Para mensual y superiores: si el ítem estuvo activo al menos 7 días Y el mes
+    // corresponde al ciclo, se cuenta 1. Así un cambio el día 8 genera 1 ocurrencia
+    // en el período anterior (días 1-7) y días×frecuencia en el nuevo período.
+    case 'mensual':    return diasActivos >= 7 ? 1 : 0
+    case 'bimestral':  return (mesIdx - mesInicio + 12) % 2 === 0 && diasActivos >= 7 ? 1 : 0
+    case 'trimestral': return (mesIdx - mesInicio + 12) % 3 === 0 && diasActivos >= 7 ? 1 : 0
+    case 'semestral':  return (mesIdx - mesInicio + 12) % 6 === 0 && diasActivos >= 7 ? 1 : 0
+    case 'anual':      return mesIdx === mesInicio && diasActivos >= 7 ? 1 : 0
+    default:           return 0
   }
 }
 
@@ -45,33 +52,29 @@ router.get('/cumplimiento', authMW, async (req, res) => {
 
     if (!items.length) return res.json({ resultado: [], items: [] })
 
-    // Inspecciones del año: sumar ÍTEMS verificados (equipos × tareas) por prefijo por mes
-    const desde = new Date(anio, 0, 1)
-    const hasta  = new Date(anio + 1, 0, 1)
-    const filtroInsp = { createdAt: { $gte: desde, $lt: hasta } }
+    // Inspecciones del año filtradas por fecha de verificación (campo fecha, no createdAt)
+    const desde      = new Date(anio, 0, 1)
+    const hasta      = new Date(anio + 1, 0, 1)
+    const filtroInsp = { fecha: { $gte: desde, $lt: hasta } }
     if (estacion) filtroInsp.estacion = estacion
     const inspecciones = await Inspeccion.find(filtroInsp)
-      .select('createdAt equipos tareasVerificadas fecha planItemId')
+      .select('equipos tareasVerificadas fecha planItemId')
       .lean()
 
-    // Dos mapas: por planItemId (directo) y por prefix (legacy/prefijo)
-    const ejecutadoPorItemId  = {}  // [mes][planItemId] = suma ítems
-    const ejecutadoPorPrefix  = {}  // [mes][PREFIX] = suma ítems
-    const ejecutadoPorMes     = {}  // [mes] = suma ítems (sin prefix)
+    // Dos mapas: por planItemId (directo) y por prefix (legacy/sin planItemId)
+    const ejecutadoPorItemId = {}
+    const ejecutadoPorPrefix = {}
 
     for (const insp of inspecciones) {
-      const fechaRef    = insp.fecha || insp.createdAt
-      const mes         = MESES[new Date(fechaRef).getMonth()]
+      const mes         = MESES[new Date(insp.fecha).getMonth()]
       const tareasCount = Math.max((insp.tareasVerificadas || []).length, 1)
 
       if (insp.planItemId) {
-        // Conteo directo por planItemId — usa cantidad real de equipos verificados
         if (!ejecutadoPorItemId[mes]) ejecutadoPorItemId[mes] = {}
         const pid   = insp.planItemId.toString()
         const units = Math.max((insp.equipos || []).length, 1)
         ejecutadoPorItemId[mes][pid] = (ejecutadoPorItemId[mes][pid] || 0) + (units * tareasCount)
       } else {
-        // Conteo por prefijo (inspecciones anteriores o manuales)
         if (!ejecutadoPorPrefix[mes]) ejecutadoPorPrefix[mes] = {}
         const unidadesPorPrefix = {}
         for (const eq of (insp.equipos || [])) {
@@ -81,13 +84,13 @@ router.get('/cumplimiento', authMW, async (req, res) => {
         for (const [prefix, unidades] of Object.entries(unidadesPorPrefix)) {
           ejecutadoPorPrefix[mes][prefix] = (ejecutadoPorPrefix[mes][prefix] || 0) + (unidades * tareasCount)
         }
-        ejecutadoPorMes[mes] = (ejecutadoPorMes[mes] || 0) + tareasCount
       }
     }
 
     const resultado = MESES.map((mes, mesIdx) => {
       const primerDia = new Date(anio, mesIdx, 1)
       const ultimoDia = new Date(anio, mesIdx + 1, 0)
+      const diasMes   = ultimoDia.getDate()
 
       const itemsMes = items.filter(item => {
         if (!(item.tareas?.length)) return false
@@ -97,22 +100,41 @@ router.get('/cumplimiento', authMW, async (req, res) => {
       })
 
       let planificado = 0, ejecutado = 0
+      // Rastrear prefijos ya sumados: evita doble conteo cuando hay dos versiones
+      // del mismo ítem vigentes en el mismo mes (cambio de periodicidad a mitad de mes)
+      const prefixContado = new Set()
+
       for (const item of itemsMes) {
-        const frec = frecuenciaMensual(item.periodicidad, mesIdx, anio, item.mesInicio || 0)
+        // Días activos reales dentro de este mes según vigencia
+        const vigDesde = item.vigenciaDesde ? new Date(item.vigenciaDesde) : new Date(anio, 0, 1)
+        const vigHasta = item.vigenciaHasta ? new Date(item.vigenciaHasta) : ultimoDia
+        const diaInicio   = vigDesde > primerDia ? vigDesde.getDate() : 1
+        const diaFin      = vigHasta < ultimoDia  ? vigHasta.getDate() : diasMes
+        const diasActivos = Math.max(0, diaFin - diaInicio + 1)
+
+        const frec = frecuenciaParcial(item.periodicidad, diasActivos, diasMes, mesIdx, item.mesInicio || 0)
         if (frec === 0) continue
+
         const cantUnidades = item.unidades?.length || 1
         const cantTareas   = item.tareas.length
-        planificado += frec * cantUnidades * cantTareas
+        const planItem     = frec * cantUnidades * cantTareas
+        planificado += planItem
 
-        // Primero: coincidencia directa por planItemId (inspecciones nuevas)
         const byId = ejecutadoPorItemId[mes]?.[item._id.toString()] || 0
-        // Segundo: coincidencia por prefijo (inspecciones sin planItemId)
-        const byPrefix = item.codigoPrefix
-          ? (ejecutadoPorPrefix[mes]?.[item.codigoPrefix.toUpperCase()] || 0)
-          : (ejecutadoPorMes[mes] || 0)
-        ejecutado += byId + byPrefix
+
+        // byPrefix solo se suma una vez por prefijo (evita doble conteo entre versiones)
+        const prefixKey = (item.codigoPrefix || '').toUpperCase()
+        let byPrefix = 0
+        if (!prefixContado.has(prefixKey)) {
+          byPrefix = prefixKey ? (ejecutadoPorPrefix[mes]?.[prefixKey] || 0) : 0
+          prefixContado.add(prefixKey)
+        }
+
+        ejecutado += Math.min(byId + byPrefix, planItem)
       }
-      return { mes, planificado, ejecutado, porcentaje: planificado > 0 ? Math.round((ejecutado / planificado) * 100) : null }
+
+      const ejFinal = Math.min(ejecutado, planificado)
+      return { mes, planificado, ejecutado: ejFinal, porcentaje: planificado > 0 ? Math.round((ejFinal / planificado) * 100) : null }
     })
 
     // Items vigentes para mostrar en la tabla
@@ -180,23 +202,35 @@ router.get('/cumplimiento/detalle', authMW, async (req, res) => {
         return vigDesde <= ultimoDia && (vigHasta === null || vigHasta >= primerDia)
       })
 
-      // Agrupar por equipo+prefix
-      const tiposDelMes = {}
+      const diasMes = ultimoDia.getDate()
+      // Agrupar por equipo+prefix con frecuencia parcial y sin doble conteo de prefix
+      const tiposDelMes   = {}
+      const prefixContado = new Set()
+
       for (const item of itemsMes) {
         const key  = `${item.equipo}||${item.codigoPrefix || ''}`
         if (!tiposDelMes[key]) tiposDelMes[key] = { equipo: item.equipo, codigoPrefix: item.codigoPrefix || '', planificado: 0, ejecutado: 0 }
         const tipo = tiposDelMes[key]
 
-        const frec = frecuenciaMensual(item.periodicidad, mesIdx, anio, item.mesInicio || 0)
+        const vigDesde = item.vigenciaDesde ? new Date(item.vigenciaDesde) : new Date(anio, 0, 1)
+        const vigHasta = item.vigenciaHasta ? new Date(item.vigenciaHasta) : ultimoDia
+        const diaInicio   = vigDesde > primerDia ? vigDesde.getDate() : 1
+        const diaFin      = vigHasta < ultimoDia  ? vigHasta.getDate() : diasMes
+        const diasActivos = Math.max(0, diaFin - diaInicio + 1)
+
+        const frec = frecuenciaParcial(item.periodicidad, diasActivos, diasMes, mesIdx, item.mesInicio || 0)
         if (frec === 0) continue
         const cantUnidades = item.unidades?.length || 1
         const cantTareas   = item.tareas.length
         tipo.planificado += frec * cantUnidades * cantTareas
 
-        const byId     = ejecutadoPorItemId[mes]?.[item._id.toString()] || 0
-        const byPrefix = item.codigoPrefix
-          ? (ejecutadoPorPrefix[mes]?.[item.codigoPrefix.toUpperCase()] || 0)
-          : 0
+        const byId = ejecutadoPorItemId[mes]?.[item._id.toString()] || 0
+        const prefixKey = (item.codigoPrefix || '').toUpperCase()
+        let byPrefix = 0
+        if (!prefixContado.has(prefixKey)) {
+          byPrefix = prefixKey ? (ejecutadoPorPrefix[mes]?.[prefixKey] || 0) : 0
+          prefixContado.add(prefixKey)
+        }
         tipo.ejecutado += byId + byPrefix
       }
 
