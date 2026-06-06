@@ -270,6 +270,22 @@ router.post('/', authMW, async (req, res) => {
   } catch (e) { res.status(400).json({ error: e.message }) }
 })
 
+// ─── PATCH /plan/:id/vigencia ─────────────────────────────────────────────────
+// Permite corregir directamente vigenciaDesde y/o vigenciaHasta de una versión
+// (solo admin). Útil para corregir errores de fechas en versiones ya creadas.
+router.patch('/:id/vigencia', authMW, async (req, res) => {
+  if (req.usuario.rol !== 'admin') return res.status(403).json({ error: 'Solo administradores' })
+  try {
+    const item = await ItemPlan.findById(req.params.id)
+    if (!item) return res.status(404).json({ error: 'Item no encontrado' })
+    const { vigenciaDesde, vigenciaHasta } = req.body
+    if (vigenciaDesde !== undefined) item.vigenciaDesde = vigenciaDesde ? new Date(vigenciaDesde + 'T00:00:00') : null
+    if (vigenciaHasta !== undefined) item.vigenciaHasta = vigenciaHasta ? new Date(vigenciaHasta + 'T00:00:00') : null
+    await item.save()
+    res.json(item)
+  } catch (e) { res.status(400).json({ error: e.message }) }
+})
+
 // ─── PUT /plan/:id ────────────────────────────────────────────────────────────
 router.put('/:id', authMW, async (req, res) => {
   if (req.usuario.rol !== 'admin') return res.status(403).json({ error: 'Solo administradores' })

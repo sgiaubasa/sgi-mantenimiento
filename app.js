@@ -256,24 +256,23 @@ async function loadKpis(estacion = '', desde = '', hasta = '') {
   } catch (_) {}
 }
 
-// Calcula el cumplimiento PMP para el rango seleccionado y actualiza el gauge
+// Calcula el cumplimiento PMP para el rango seleccionado y actualiza el gauge.
+// Usa el mismo endpoint que el Detalle de Cumplimiento para garantizar consistencia.
 async function loadGaugePMP(estacion = '', desde = '', hasta = '') {
-  const anio = new Date().getFullYear()
+  const anio = desde ? Number(desde.split('-')[0]) : new Date().getFullYear()
   try {
     const params = new URLSearchParams({ anio })
     if (estacion) params.append('estacion', estacion)
-    const { resultado } = await apiFetch('/plan/cumplimiento?' + params)
+    // Usamos /cumplimiento/detalle — mismo cálculo que la vista Detalle Cumplimiento
+    const { resultado } = await apiFetch('/plan/cumplimiento/detalle?' + params)
     if (!resultado?.length) { updateGauge(null); return }
 
-    const MESES_IDX = { enero:0,febrero:1,marzo:2,abril:3,mayo:4,junio:5,
-      julio:6,agosto:7,septiembre:8,octubre:9,noviembre:10,diciembre:11 }
     const desdeIdx = desde ? Number(desde.split('-')[1]) - 1 : 0
     const hastaIdx = hasta ? Number(hasta.split('-')[1]) - 1 : new Date().getMonth()
 
     let totalPlan = 0, totalEjec = 0
     for (const r of resultado) {
-      const idx = MESES_IDX[r.mes] ?? -1
-      if (idx >= desdeIdx && idx <= hastaIdx) {
+      if (r.mesIdx >= desdeIdx && r.mesIdx <= hastaIdx) {
         totalPlan += r.planificado || 0
         totalEjec += r.ejecutado   || 0
       }
@@ -495,7 +494,8 @@ async function loadBarPMP() {
     const estacion = document.getElementById('resumen-estacion')?.value || ''
     const params   = new URLSearchParams({ anio })
     if (estacion) params.append('estacion', estacion)
-    const { resultado } = await apiFetch('/plan/cumplimiento?' + params)
+    // Mismo endpoint que el gauge para consistencia
+    const { resultado } = await apiFetch('/plan/cumplimiento/detalle?' + params)
     if (!resultado) return
 
     barChart.data.datasets[0].data = resultado.map(r => r.planificado || 0)
