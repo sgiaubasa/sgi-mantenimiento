@@ -1494,30 +1494,18 @@ function abrirModalEditarPeriod(id) {
 
   // Periodicidad y "Aplicar desde"
   const periodActual = item.periodicidad
-  document.getElementById('ep-periodicidad').value = periodActual
+  const selPeriod = document.getElementById('ep-periodicidad')
+  selPeriod.value = periodActual
+  selPeriod.dataset.original = periodActual
 
-  const ahora = new Date()
-  const anio  = parseInt(document.getElementById('plan-anio')?.value || ahora.getFullYear(), 10)
-  const sel   = document.getElementById('ep-desde')
-  sel.innerHTML = ''
-  for (let m = 0; m < 12; m++) {
-    const val      = `${anio}-${String(m + 1).padStart(2, '0')}-01`
-    const esPasado = m < ahora.getMonth() && anio <= ahora.getFullYear()
-    sel.innerHTML += `<option value="${val}"${m === ahora.getMonth() ? ' selected' : ''}>${MESES_NOMBRES[m]} ${anio}${esPasado ? ' (pasado)' : ''}</option>`
-  }
+  // Selector de fecha exacta — por defecto hoy
+  const ahora     = new Date()
+  const inputDate = document.getElementById('ep-desde')
+  inputDate.value = ahora.toISOString().split('T')[0]
 
   document.getElementById('ep-info').style.display = 'none'
   document.getElementById('ep-periodicidad').onchange = function () {
-    if (this.value !== periodActual) {
-      actualizarInfoEditarPeriod(periodActual, this.value)
-      document.getElementById('ep-info').style.display = 'block'
-    } else {
-      document.getElementById('ep-info').style.display = 'none'
-    }
-  }
-  document.getElementById('ep-desde').onchange = function () {
-    const pNuevo = document.getElementById('ep-periodicidad').value
-    if (pNuevo !== periodActual) actualizarInfoEditarPeriod(periodActual, pNuevo)
+    actualizarInfoEditarPeriodEvt()
   }
   document.getElementById('modal-editar-period').style.display = 'flex'
 }
@@ -1544,15 +1532,31 @@ function agregarUnidadEdicion() {
   input.focus()
 }
 
-function actualizarInfoEditarPeriod(periodViejo, periodNuevo) {
-  const desde  = document.getElementById('ep-desde')?.value
-  const mesIdx = desde ? new Date(desde + 'T12:00:00').getMonth() : new Date().getMonth()
-  const PERIOD_LBL = { diario:'Diario', semanal:'Semanal', quincenal:'Quincenal', mensual:'Mensual', bimestral:'Bimestral', trimestral:'Trimestral', semestral:'Semestral', anual:'Anual' }
-  const info = document.getElementById('ep-info')
+function actualizarInfoEditarPeriodEvt() {
+  const periodViejo = document.getElementById('ep-periodicidad')?.dataset.original
+  const periodNuevo = document.getElementById('ep-periodicidad')?.value
+  const desde       = document.getElementById('ep-desde')?.value
+  const info        = document.getElementById('ep-info')
   if (!info) return
-  info.innerHTML = `Meses anteriores a <strong>${MESES_NOMBRES[mesIdx]}</strong>: conservan <strong>${PERIOD_LBL[periodViejo]||periodViejo}</strong>.<br>
-    Desde <strong>${MESES_NOMBRES[mesIdx]}</strong>: nueva periodicidad <strong>${PERIOD_LBL[periodNuevo]||periodNuevo}</strong>.<br>
-    <span style="font-size:12px;opacity:0.8">El historial de cumplimiento de meses anteriores no cambia.</span>`
+
+  if (!desde || !periodNuevo) { info.style.display = 'none'; return }
+
+  const PERIOD_LBL = { diario:'Diario', semanal:'Semanal', quincenal:'Quincenal', mensual:'Mensual', bimestral:'Bimestral', trimestral:'Trimestral', semestral:'Semestral', anual:'Anual' }
+  const fechaD  = new Date(desde + 'T12:00:00')
+  const diaAntes = new Date(fechaD); diaAntes.setDate(diaAntes.getDate() - 1)
+  const fmtDate = d => `${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()}`
+
+  info.style.display = 'block'
+  if (periodViejo && periodNuevo !== periodViejo) {
+    info.innerHTML = `
+      Hasta el <strong>${fmtDate(diaAntes)}</strong>: se mantiene <strong>${PERIOD_LBL[periodViejo]||periodViejo}</strong>.<br>
+      Desde el <strong>${fmtDate(fechaD)}</strong>: nueva periodicidad <strong>${PERIOD_LBL[periodNuevo]||periodNuevo}</strong>.<br>
+      Las tareas e ítems editados arriba también aplican a la nueva versión.<br>
+      <span style="font-size:11px;opacity:0.8">El historial de cumplimiento anterior a esta fecha no cambia.</span>`
+  } else {
+    info.innerHTML = `La periodicidad se actualizará en esta versión del ítem.<br>
+      <span style="font-size:11px;opacity:0.8">Usá una fecha distinta al inicio del ítem para crear una versión nueva.</span>`
+  }
 }
 
 function cerrarModalEditarPeriod() {

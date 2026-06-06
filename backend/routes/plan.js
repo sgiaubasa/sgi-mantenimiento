@@ -282,30 +282,47 @@ router.put('/:id', authMW, async (req, res) => {
       const fechaDesde = new Date(aplicarDesde + 'T00:00:00')
       const mesInicio  = fechaDesde.getMonth()
 
-      // Si el mes seleccionado coincide con el vigenciaDesde actual (o no tiene vigenciaDesde)
-      // → actualizar en lugar de versionar
+      // Comparar fecha EXACTA (día): si la fecha indicada coincide con el vigenciaDesde
+      // actual, se actualiza en lugar de versionar. Así el usuario puede cambiar la
+      // periodicidad desde un día exacto dentro del mismo mes sin crear una versión extra.
       const vigDesdeActual = itemActual.vigenciaDesde ? new Date(itemActual.vigenciaDesde) : null
-      const mismoMes = !vigDesdeActual || (
+      const mismoDia = !vigDesdeActual || (
         vigDesdeActual.getFullYear() === fechaDesde.getFullYear() &&
-        vigDesdeActual.getMonth()    === fechaDesde.getMonth()
+        vigDesdeActual.getMonth()    === fechaDesde.getMonth()    &&
+        vigDesdeActual.getDate()     === fechaDesde.getDate()
       )
 
-      if (mismoMes) {
+      if (mismoDia) {
+        // Actualizar en lugar de versionar (misma fecha de inicio)
         itemActual.periodicidad = periodicidad
         itemActual.mesInicio    = mesInicio
         if (!vigDesdeActual) itemActual.vigenciaDesde = fechaDesde
+        // También aplicar cambios de tareas y unidades al ítem actual
+        if (resto.tareas)   itemActual.tareas   = resto.tareas
+        if (resto.unidades) itemActual.unidades = resto.unidades
         await itemActual.save()
         return res.json(itemActual)
       }
 
-      // Versionar: cierra el actual y crea uno nuevo desde la fecha indicada
+      // Versionar: cierra el ítem actual en fecha - 1 día y crea uno nuevo
       const fechaHasta = new Date(fechaDesde)
       fechaHasta.setDate(fechaHasta.getDate() - 1)
       itemActual.vigenciaHasta = fechaHasta
       await itemActual.save()
 
+      // La nueva versión hereda todos los datos del ítem actual, PERO
+      // aplica los cambios de tareas/unidades del formulario (resto)
       const { _id, createdAt, updatedAt, __v, ...datosBase } = itemActual.toObject()
-      const nuevoItem = await ItemPlan.create({ ...datosBase, periodicidad, mesInicio, vigenciaDesde: fechaDesde, vigenciaHasta: null })
+      const nuevoItem = await ItemPlan.create({
+        ...datosBase,
+        periodicidad,
+        mesInicio,
+        vigenciaDesde: fechaDesde,
+        vigenciaHasta: null,
+        // Tareas y unidades editadas en el modal aplican a la nueva versión
+        ...(resto.tareas   ? { tareas:   resto.tareas }   : {}),
+        ...(resto.unidades ? { unidades: resto.unidades } : {})
+      })
       return res.status(201).json(nuevoItem)
     }
 
