@@ -85,11 +85,18 @@ router.get('/cumplimiento', authMW, async (req, res) => {
           if (!ejecutadoPorItemId[mes]) ejecutadoPorItemId[mes] = {}
           ejecutadoPorItemId[mes][pid] = (ejecutadoPorItemId[mes][pid] || 0) + (units * tareasCount)
         } else {
-          // planItemId huérfano (ítem eliminado/inactivo) → caer al bucket de prefix
+          // planItemId huérfano: buscar prefix en lookup; si el ítem fue borrado
+          // físicamente de la BD, extraer el prefix del código de equipo como fallback
+          if (!ejecutadoPorPrefix[mes]) ejecutadoPorPrefix[mes] = {}
           const prefix = planItemPrefixLookup[pid]
           if (prefix) {
-            if (!ejecutadoPorPrefix[mes]) ejecutadoPorPrefix[mes] = {}
             ejecutadoPorPrefix[mes][prefix] = (ejecutadoPorPrefix[mes][prefix] || 0) + (units * tareasCount)
+          } else {
+            // Ítem borrado físicamente: extraer prefix del código del equipo
+            for (const eq of (insp.equipos || [])) {
+              const pfx = (eq.codigo || '').replace(/[-\s\d].*/, '').toUpperCase()
+              if (pfx) ejecutadoPorPrefix[mes][pfx] = (ejecutadoPorPrefix[mes][pfx] || 0) + tareasCount
+            }
           }
         }
       } else {
@@ -210,11 +217,16 @@ router.get('/cumplimiento/detalle', authMW, async (req, res) => {
           if (!ejecutadoPorItemId[mes]) ejecutadoPorItemId[mes] = {}
           ejecutadoPorItemId[mes][pid] = (ejecutadoPorItemId[mes][pid] || 0) + (units * tareasCount)
         } else {
-          // Huérfano → caer al prefix
+          // Huérfano: lookup primero, si el ítem fue borrado físicamente usar el código del equipo
+          if (!ejecutadoPorPrefix[mes]) ejecutadoPorPrefix[mes] = {}
           const prefix = planItemPrefixLookupDet[pid]
           if (prefix) {
-            if (!ejecutadoPorPrefix[mes]) ejecutadoPorPrefix[mes] = {}
             ejecutadoPorPrefix[mes][prefix] = (ejecutadoPorPrefix[mes][prefix] || 0) + (units * tareasCount)
+          } else {
+            for (const eq of (insp.equipos || [])) {
+              const pfx = (eq.codigo || '').replace(/[-\s\d].*/, '').toUpperCase()
+              if (pfx) ejecutadoPorPrefix[mes][pfx] = (ejecutadoPorPrefix[mes][pfx] || 0) + tareasCount
+            }
           }
         }
       } else {
