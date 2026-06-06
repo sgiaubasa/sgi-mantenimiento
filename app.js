@@ -1586,8 +1586,11 @@ async function guardarCambioPeriod() {
   const vigHastaOrig = toLocalDate(itemOrig?.vigenciaHasta)
   const vigCambio = vigDesde !== vigDesdeOrig || vigHasta !== vigHastaOrig
 
+  const periodOrig  = document.getElementById('ep-periodicidad')?.dataset.original
+  const perioCambio = periodicidad !== periodOrig
+
   try {
-    // 1. Si cambiaron las fechas de vigencia → aplicar corrección directa (PATCH)
+    // 1. Corrección directa de fechas (PATCH) — nunca crea versión nueva
     if (vigCambio) {
       await apiFetch(`/plan/${id}/vigencia`, {
         method: 'PATCH',
@@ -1595,13 +1598,21 @@ async function guardarCambioPeriod() {
       })
     }
 
-    // 2. Cambio de periodicidad + crear nueva versión si corresponde
-    await apiFetch(`/plan/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify({ periodicidad, aplicarDesde, tareas, unidades })
-    })
+    // 2. Solo versionar si cambió la periodicidad
+    if (perioCambio) {
+      await apiFetch(`/plan/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ periodicidad, aplicarDesde, tareas, unidades })
+      })
+    } else {
+      // Sin cambio de periodicidad → actualizar tareas/unidades en el ítem actual (sin versionar)
+      await apiFetch(`/plan/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ tareas, unidades })
+      })
+    }
 
-    showNotification(vigCambio ? 'Fechas y periodicidad actualizadas.' : 'Cambios guardados.', 'success')
+    showNotification(vigCambio ? 'Fechas de vigencia corregidas.' : 'Cambios guardados.', 'success')
     cerrarModalEditarPeriod()
     loadCumplimiento()
   } catch (err) { showNotification('Error: ' + err.message, 'error') }
