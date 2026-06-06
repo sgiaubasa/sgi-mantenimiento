@@ -1702,30 +1702,6 @@ async function loadRepositorio() {
 }
 
 // ─── Detalle de Cumplimiento ──────────────────────────────────────────────────
-let _dcExpandidos = new Set()  // meses expandidos
-let _dcTodoExpandido = false
-
-function toggleTodoDetalle() {
-  _dcTodoExpandido = !_dcTodoExpandido
-  document.querySelectorAll('.dc-detalle-rows').forEach(el => {
-    el.style.display = _dcTodoExpandido ? '' : 'none'
-  })
-  document.querySelectorAll('.dc-mes-toggle').forEach(el => {
-    el.textContent = _dcTodoExpandido ? '▲' : '▶'
-  })
-  const btn = document.querySelector('[onclick="toggleTodoDetalle()"]')
-  if (btn) btn.textContent = _dcTodoExpandido ? '⊟ Colapsar todo' : '⊞ Expandir todo'
-}
-
-function toggleDetalleMes(mesIdx) {
-  const rows = document.getElementById(`dc-rows-${mesIdx}`)
-  const icon = document.getElementById(`dc-icon-${mesIdx}`)
-  if (!rows) return
-  const visible = rows.style.display !== 'none'
-  rows.style.display = visible ? 'none' : ''
-  if (icon) icon.textContent = visible ? '▶' : '▲'
-}
-
 function colorPct(p) {
   if (p === null || p === undefined) return 'var(--text-secondary)'
   if (p >= 90) return 'var(--success-color)'
@@ -1733,11 +1709,102 @@ function colorPct(p) {
   return 'var(--danger-color)'
 }
 
+function toggleTodoDetalle() {
+  const btn   = document.querySelector('[onclick="toggleTodoDetalle()"]')
+  const rows  = document.querySelectorAll('.dc-row-equipo')
+  const open  = [...rows].some(r => r.style.display !== 'none')
+  rows.forEach(r => r.style.display = open ? 'none' : '')
+  // Ocultar registros si colapsamos
+  if (open) document.querySelectorAll('.dc-row-regs').forEach(r => r.style.display = 'none')
+  document.querySelectorAll('.dc-icon-mes').forEach(ic => ic.textContent = open ? '▶' : '▲')
+  if (btn) btn.textContent = open ? '⊞ Expandir todo' : '⊟ Colapsar todo'
+}
+
+function toggleDetalleMes(mesIdx) {
+  const eqRows  = document.querySelectorAll(`.dc-row-equipo[data-mes="${mesIdx}"]`)
+  const icon    = document.getElementById(`dc-icon-${mesIdx}`)
+  const visible = [...eqRows].some(r => r.style.display !== 'none')
+  eqRows.forEach(r => r.style.display = visible ? 'none' : '')
+  // Ocultar registros si colapsamos el mes
+  if (visible) document.querySelectorAll(`.dc-row-regs[data-mes="${mesIdx}"]`).forEach(r => r.style.display = 'none')
+  if (icon) icon.textContent = visible ? '▶' : '▲'
+}
+
+function toggleDetalleEquipo(mesIdx, eqIdx, prefix) {
+  const regsRow = document.getElementById(`dc-regs-${mesIdx}-${eqIdx}`)
+  const icon    = document.getElementById(`dc-eqicon-${mesIdx}-${eqIdx}`)
+  if (!regsRow) return
+  const visible = regsRow.style.display !== 'none'
+  regsRow.style.display = visible ? 'none' : ''
+  if (icon) icon.textContent = visible ? '▶' : '▲'
+  if (!visible) cargarRegistrosDetalle(mesIdx, eqIdx, prefix)
+}
+
+async function cargarRegistrosDetalle(mesIdx, eqIdx, prefix) {
+  const inner = document.getElementById(`dc-regs-inner-${mesIdx}-${eqIdx}`)
+  if (!inner || inner.dataset.loaded === 'true') return
+  inner.innerHTML = '<span style="color:var(--text-secondary);font-size:12px">Cargando registros...</span>'
+
+  const anio     = document.getElementById('dc-anio')?.value    || new Date().getFullYear()
+  const estacion = document.getElementById('dc-estacion')?.value || ''
+  const mesNum   = mesIdx + 1
+  const lastDay  = new Date(anio, mesNum, 0).getDate()
+  const desde    = `${anio}-${String(mesNum).padStart(2,'0')}-01`
+  const hasta    = `${anio}-${String(mesNum).padStart(2,'0')}-${String(lastDay).padStart(2,'0')}`
+
+  const params = new URLSearchParams({ desde, hasta })
+  if (prefix)   params.set('prefix', prefix)
+  if (estacion) params.set('estacion', estacion)
+
+  try {
+    const inspecciones = await apiFetch('/inspecciones?' + params)
+    inner.dataset.loaded = 'true'
+
+    if (!inspecciones.length) {
+      inner.innerHTML = '<p style="color:var(--text-secondary);font-style:italic;font-size:12px;margin:6px 0">Sin registros para este tipo y período.</p>'
+      return
+    }
+
+    inner.innerHTML = `<table style="width:100%;border-collapse:collapse;margin:6px 0">
+      <thead>
+        <tr style="border-bottom:1px solid #E0E5F2">
+          <th style="text-align:left;padding:4px 10px;font-size:11px;color:var(--text-secondary);font-weight:600;text-transform:uppercase">Fecha</th>
+          <th style="text-align:left;padding:4px 10px;font-size:11px;color:var(--text-secondary);font-weight:600;text-transform:uppercase">Estación</th>
+          <th style="text-align:center;padding:4px 10px;font-size:11px;color:var(--text-secondary);font-weight:600;text-transform:uppercase">Tipo</th>
+          <th style="text-align:center;padding:4px 10px;font-size:11px;color:var(--text-secondary);font-weight:600;text-transform:uppercase">Fallas</th>
+          <th style="text-align:center;padding:4px 10px;font-size:11px;color:var(--text-secondary);font-weight:600;text-transform:uppercase">Evidencia</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${inspecciones.map(i => {
+          const fecha  = formatDate(i.fecha || i.createdAt)
+          const tipo   = i.archivoNombre === 'Verificación manual' ? '✏ Manual' : '🤖 IA'
+          const fallas = i.tieneFallas
+            ? `<span style="color:var(--danger-color);font-weight:600">Sí (${(i.desviosGenerados||[]).length})</span>`
+            : `<span style="color:var(--success-color)">No</span>`
+          const evCount = i.evidencias?.length || (i.evidenciaNombre ? 1 : 0)
+          const evBtn   = evCount > 0
+            ? `<button class="btn-secondary btn-sm" style="font-size:11px;padding:3px 8px" onclick="verEvidencia('${i._id}',${evCount})">📎 Ver</button>`
+            : '<span style="color:var(--text-secondary)">—</span>'
+          return `<tr style="border-bottom:1px solid #F8FAFC">
+            <td style="padding:5px 10px;font-size:12px;white-space:nowrap">${fecha}</td>
+            <td style="padding:5px 10px;font-size:12px">${escHtml(i.estacion)}</td>
+            <td style="padding:5px 10px;font-size:12px;text-align:center">${tipo}</td>
+            <td style="padding:5px 10px;font-size:12px;text-align:center">${fallas}</td>
+            <td style="padding:5px 10px;font-size:12px;text-align:center">${evBtn}</td>
+          </tr>`
+        }).join('')}
+      </tbody>
+    </table>`
+  } catch (err) {
+    inner.innerHTML = `<p style="color:var(--danger-color);font-size:12px">Error: ${err.message}</p>`
+  }
+}
+
 async function loadDetalleCumpl() {
   const contenedor = document.getElementById('dc-lista')
   if (!contenedor) return
   contenedor.innerHTML = '<p class="empty-state">Cargando...</p>'
-  _dcExpandidos.clear()
 
   const estacion = document.getElementById('dc-estacion')?.value || ''
   const anio     = document.getElementById('dc-anio')?.value    || new Date().getFullYear()
@@ -1755,14 +1822,15 @@ async function loadDetalleCumpl() {
     const MESES_LABEL = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
     const mesActual   = new Date().getMonth()
 
+    // Tabla plana: sin tbodies anidados (estructura válida y más manejable)
     let html = `<table class="tabla-plan" style="width:100%;border-collapse:collapse">
       <thead>
         <tr>
-          <th style="width:180px">Mes / Tipo de equipo</th>
+          <th>Mes / Tipo / Registros</th>
           <th style="text-align:right">Programado</th>
           <th style="text-align:right">Realizado</th>
-          <th style="text-align:right;width:80px">%</th>
-          <th style="width:160px">Avance</th>
+          <th style="text-align:right;width:70px">%</th>
+          <th style="width:150px">Avance</th>
         </tr>
       </thead>
       <tbody>`
@@ -1774,13 +1842,12 @@ async function loadDetalleCumpl() {
       const pctColor    = colorPct(porcentaje)
       const pct         = porcentaje !== null ? `${porcentaje}%` : '—'
       const barra       = porcentaje !== null
-        ? `<div style="background:#E5E7EB;border-radius:4px;height:8px;overflow:hidden"><div style="background:${pctColor};height:100%;width:${Math.min(porcentaje,100)}%;transition:width .3s"></div></div>`
-        : ''
+        ? `<div style="background:#E5E7EB;border-radius:4px;height:8px;overflow:hidden"><div style="background:${pctColor};height:100%;width:${Math.min(porcentaje,100)}%;transition:width .3s"></div></div>` : ''
 
-      // Fila resumen del mes (clickeable)
+      // ── Nivel 1: Fila del mes ──────────────────────────────────────
       html += `<tr style="background:${esMesActual ? '#EEF2FF' : '#F8FAFC'};cursor:pointer;border-top:2px solid #E0E5F2" onclick="toggleDetalleMes(${mesIdx})">
         <td style="padding:10px 12px;font-weight:700;color:var(--text-primary)">
-          <span id="dc-icon-${mesIdx}" class="dc-mes-toggle" style="margin-right:8px;font-size:11px;color:var(--primary-color)">▶</span>
+          <span id="dc-icon-${mesIdx}" class="dc-icon-mes" style="margin-right:8px;font-size:11px;color:var(--primary-color)">▶</span>
           ${label}${esMesActual ? ' <span style="font-size:10px;background:var(--primary-color);color:#fff;padding:2px 6px;border-radius:10px;font-weight:600">HOY</span>' : ''}
         </td>
         <td style="text-align:right;padding:10px 12px;font-weight:600">${planificado.toLocaleString('es-AR')}</td>
@@ -1789,32 +1856,46 @@ async function loadDetalleCumpl() {
         <td style="padding:10px 12px">${barra}</td>
       </tr>`
 
-      // Filas de detalle por tipo (ocultas por defecto)
-      html += `<tbody id="dc-rows-${mesIdx}" class="dc-detalle-rows" style="display:none">`
-      if (detalle.length) {
-        for (const d of detalle) {
-          const dpct      = `${d.porcentaje}%`
-          const dColor    = colorPct(d.porcentaje)
-          const dBarra    = `<div style="background:#E5E7EB;border-radius:4px;height:6px;overflow:hidden"><div style="background:${dColor};height:100%;width:${Math.min(d.porcentaje,100)}%"></div></div>`
-          const badge     = d.codigoPrefix ? `<span style="font-size:10px;font-weight:700;color:var(--primary-color);background:#EEF2FF;padding:2px 6px;border-radius:6px;margin-left:6px">${d.codigoPrefix}</span>` : ''
-          html += `<tr style="background:#fff;border-top:1px solid #F1F5F9">
-            <td style="padding:8px 12px 8px 36px;font-size:13px;color:var(--text-primary)">${escHtml(d.equipo)}${badge}</td>
-            <td style="text-align:right;padding:8px 12px;font-size:13px;color:var(--text-secondary)">${d.planificado.toLocaleString('es-AR')}</td>
-            <td style="text-align:right;padding:8px 12px;font-size:13px;color:var(--text-secondary)">${d.ejecutado.toLocaleString('es-AR')}</td>
-            <td style="text-align:right;padding:8px 12px;font-size:13px;font-weight:600;color:${dColor}">${dpct}</td>
-            <td style="padding:8px 12px">${dBarra}</td>
-          </tr>`
-        }
-      } else {
-        html += `<tr style="background:#fff"><td colspan="5" style="padding:8px 12px 8px 36px;font-size:12px;color:var(--text-secondary)">Sin ítems planificados para este mes.</td></tr>`
+      if (!detalle.length) {
+        html += `<tr class="dc-row-equipo" data-mes="${mesIdx}" style="display:none">
+          <td colspan="5" style="padding:8px 12px 8px 36px;font-size:12px;color:var(--text-secondary)">Sin ítems planificados para este mes.</td>
+        </tr>`
       }
-      html += '</tbody>'
+
+      for (let i = 0; i < detalle.length; i++) {
+        const d      = detalle[i]
+        const dColor = colorPct(d.porcentaje)
+        const dBarra = `<div style="background:#E5E7EB;border-radius:4px;height:6px;overflow:hidden"><div style="background:${dColor};height:100%;width:${Math.min(d.porcentaje,100)}%"></div></div>`
+        const badge  = d.codigoPrefix ? `<span style="font-size:10px;font-weight:700;color:var(--primary-color);background:#EEF2FF;padding:2px 6px;border-radius:6px;margin-left:6px">${d.codigoPrefix}</span>` : ''
+
+        // ── Nivel 2: Fila del tipo de equipo (clickeable para registros) ──
+        html += `<tr class="dc-row-equipo" data-mes="${mesIdx}" id="dc-eq-${mesIdx}-${i}"
+            style="display:none;background:#fff;border-top:1px solid #F1F5F9;cursor:pointer"
+            onclick="toggleDetalleEquipo(${mesIdx},${i},'${d.codigoPrefix}')">
+          <td style="padding:8px 12px 8px 36px;font-size:13px;color:var(--text-primary)">
+            <span id="dc-eqicon-${mesIdx}-${i}" style="margin-right:6px;font-size:10px;color:var(--primary-color)">▶</span>
+            ${escHtml(d.equipo)}${badge}
+            <span style="font-size:11px;color:var(--text-secondary);margin-left:8px">ver registros</span>
+          </td>
+          <td style="text-align:right;padding:8px 12px;font-size:13px;color:var(--text-secondary)">${d.planificado.toLocaleString('es-AR')}</td>
+          <td style="text-align:right;padding:8px 12px;font-size:13px;color:var(--text-secondary)">${d.ejecutado.toLocaleString('es-AR')}</td>
+          <td style="text-align:right;padding:8px 12px;font-size:13px;font-weight:600;color:${dColor}">${d.porcentaje}%</td>
+          <td style="padding:8px 12px">${dBarra}</td>
+        </tr>`
+
+        // ── Nivel 3: Contenedor de registros (lazy-load) ──────────────
+        html += `<tr class="dc-row-regs" data-mes="${mesIdx}" id="dc-regs-${mesIdx}-${i}" style="display:none;background:#F8FBFF">
+          <td colspan="5" style="padding:4px 12px 10px 60px;border-top:1px dashed #E0E5F2">
+            <div id="dc-regs-inner-${mesIdx}-${i}">Cargando...</div>
+          </td>
+        </tr>`
+      }
     }
 
     html += '</tbody></table>'
     contenedor.innerHTML = html
 
-    // Expandir el mes actual por defecto
+    // Expandir el mes actual por defecto (nivel 1)
     toggleDetalleMes(mesActual)
 
   } catch (err) {
