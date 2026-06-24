@@ -287,9 +287,17 @@ router.get('/kpis', authMW, async (req, res) => {
 
     // Filtro por FECHA de verificación (campo fecha), no por fecha de carga
     const filtroFechaInsp = { fecha: { $gte: desde, $lt: hasta } }
-    const filtroInsp = estacion
-      ? { ...filtroFechaInsp, estacion }
-      : { ...filtroFechaInsp }
+    let filtroInsp = { ...filtroFechaInsp };
+
+    if (req.usuario.rol !== 'admin' && !(req.usuario.estaciones || []).includes('Todas')) {
+      const allowed = req.usuario.estaciones || [];
+      if (estacion && !allowed.includes(estacion)) {
+        return res.json({ labels: [], inspecciones: [], fallas: [], disponibilidad: 100, metas: { insp: 0, fallas: 0 }, indicadoresTabla: [], notas: [] });
+      }
+      filtroInsp.estacion = estacion ? estacion : { $in: allowed };
+    } else if (estacion) {
+      filtroInsp.estacion = estacion;
+    }
 
     const [totalMes, conFallasMes, pendientes, inspeccionesMes] = await Promise.all([
       Inspeccion.countDocuments(filtroInsp),
@@ -526,7 +534,13 @@ router.get('/', authMW, async (req, res) => {
     const { estacion, desde, hasta, tipo, fallas, prefix } = req.query
     const filter = {}
 
-    if (estacion) filter.estacion = estacion
+    if (req.usuario.rol !== 'admin' && !(req.usuario.estaciones || []).includes('Todas')) {
+      const allowed = req.usuario.estaciones || [];
+      if (estacion && !allowed.includes(estacion)) return res.json([]);
+      filter.estacion = estacion ? estacion : { $in: allowed };
+    } else if (estacion) {
+      filter.estacion = estacion;
+    }
 
     // Rango de fechas por campo fecha (igual que KPIs)
     if (desde || hasta) {

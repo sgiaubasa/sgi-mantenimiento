@@ -32,7 +32,14 @@ router.get('/', authMW, async (req, res) => {
   try {
     const { estacion, anio } = req.query
     const filtro = { activo: true }
-    if (estacion) filtro.estacion = estacion
+    
+    if (req.usuario.rol !== 'admin' && !(req.usuario.estaciones || []).includes('Todas')) {
+      const allowed = req.usuario.estaciones || [];
+      if (estacion && !allowed.includes(estacion)) return res.json([]);
+      filtro.estacion = estacion ? estacion : { $in: allowed };
+    } else if (estacion) {
+      filtro.estacion = estacion;
+    }
     if (anio)     filtro.anio    = Number(anio)
     const items = await ItemPlan.find(filtro).sort({ equipo: 1 })
     res.json(items)
@@ -47,7 +54,14 @@ router.get('/cumplimiento', authMW, async (req, res) => {
     const mesActual = new Date().getMonth()
 
     const filtro = { anio, activo: true }
-    if (estacion) filtro.estacion = estacion
+    
+    if (req.usuario.rol !== 'admin' && !(req.usuario.estaciones || []).includes('Todas')) {
+      const allowed = req.usuario.estaciones || [];
+      if (estacion && !allowed.includes(estacion)) return res.json({ resultado: [], items: [] });
+      filtro.estacion = estacion ? estacion : { $in: allowed };
+    } else if (estacion) {
+      filtro.estacion = estacion;
+    }
     const items = await ItemPlan.find(filtro).lean()
 
     if (!items.length) return res.json({ resultado: [], items: [] })
@@ -186,7 +200,14 @@ router.get('/cumplimiento/detalle', authMW, async (req, res) => {
     const estacion = req.query.estacion
 
     const filtro = { anio, activo: true }
-    if (estacion) filtro.estacion = estacion
+    
+    if (req.usuario.rol !== 'admin' && !(req.usuario.estaciones || []).includes('Todas')) {
+      const allowed = req.usuario.estaciones || [];
+      if (estacion && !allowed.includes(estacion)) return res.json({ resultado: [] });
+      filtro.estacion = estacion ? estacion : { $in: allowed };
+    } else if (estacion) {
+      filtro.estacion = estacion;
+    }
     const items = await ItemPlan.find(filtro).lean()
     if (!items.length) return res.json({ resultado: [] })
 
