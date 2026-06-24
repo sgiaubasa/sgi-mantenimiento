@@ -1,3 +1,4 @@
+const authMW = require('../middleware/auth')
 const router    = require('express').Router()
 const Desvio    = require('../models/Desvio')
 const Inspeccion = require('../models/Inspeccion')
@@ -9,9 +10,16 @@ function parseDate(str) {
 }
 
 // ─── GET /pendientes ─────────────────────────────────────────────────────────
-router.get('/pendientes', async (req, res) => {
+router.get('/pendientes', authMW, async (req, res) => {
   try {
-    const desvios = await Desvio.find({ estado: 'Pendiente' })
+    const filter = { estado: 'Pendiente' }
+    if (req.usuario.rol !== 'admin' && !(req.usuario.estaciones || []).includes('Todas')) {
+      const allowed = req.usuario.estaciones || [];
+      const inspIds = await Inspeccion.find({ estacion: { $in: allowed } }).select('_id').lean();
+      filter.idInspeccionOrigen = { $in: inspIds.map(i => i._id) };
+    }
+
+    const desvios = await Desvio.find(filter)
       .populate('idInspeccionOrigen', 'estacion fecha archivoNombre')
       .sort({ createdAt: -1 })
     res.json(desvios)
@@ -22,30 +30,37 @@ router.get('/pendientes', async (req, res) => {
 
 // ─── GET / ── historial completo con filtros ─────────────────────────────────
 // ?estado=Pendiente|Cerrado  ?estacion=...  ?desde=YYYY-MM  ?hasta=YYYY-MM
-router.get('/', async (req, res) => {
+router.get('/', authMW, async (req, res) => {
   try {
     const { estado, estacion, desde: desdeParam, hasta: hastaParam } = req.query
     const filter = {}
     if (estado) filter.estado = estado
 
-    // Filtro por fecha de la INSPECCIÓN ORIGEN (consistente con el KPI)
-    if (desdeParam || hastaParam) {
-      const filtroInsp = {}
-      if (desdeParam) {
-        const [y, m] = desdeParam.split('-').map(Number)
-        filtroInsp.$gte = new Date(y, m - 1, 1)
+    const filtroInsp = {}
+    if (desdeParam) {
+      const [y, m] = desdeParam.split('-').map(Number)
+      filtroInsp.$gte = new Date(y, m - 1, 1)
+    }
+    if (hastaParam) {
+      const [y, m] = hastaParam.split('-').map(Number)
+      filtroInsp.$lt = new Date(y, m, 1)
+    }
+
+    const filtroFechaInsp = {}
+    if (desdeParam || hastaParam) filtroFechaInsp.fecha = filtroInsp
+
+    if (req.usuario.rol !== 'admin' && !(req.usuario.estaciones || []).includes('Todas')) {
+      const allowed = req.usuario.estaciones || [];
+      if (estacion && !allowed.includes(estacion)) {
+        return res.json([]); // No tiene permiso para esta estación
       }
-      if (hastaParam) {
-        const [y, m] = hastaParam.split('-').map(Number)
-        filtroInsp.$lt = new Date(y, m, 1)
-      }
-      const filtroFechaInsp = { fecha: filtroInsp }
-      if (estacion) filtroFechaInsp.estacion = estacion
-      const inspIds = await Inspeccion.find(filtroFechaInsp).select('_id').lean()
-      filter.idInspeccionOrigen = { $in: inspIds.map(i => i._id) }
+      filtroFechaInsp.estacion = estacion ? estacion : { $in: allowed };
     } else if (estacion) {
-      // Sin rango de fechas pero con estación: filtrar por inspección de esa estación
-      const inspIds = await Inspeccion.find({ estacion }).select('_id').lean()
+      filtroFechaInsp.estacion = estacion;
+    }
+
+    if (Object.keys(filtroFechaInsp).length > 0) {
+      const inspIds = await Inspeccion.find(filtroFechaInsp).select('_id').lean()
       filter.idInspeccionOrigen = { $in: inspIds.map(i => i._id) }
     }
 
@@ -62,7 +77,7 @@ router.get('/', async (req, res) => {
 })
 
 // ─── PUT /:id ─── edición de campos del desvío (solo admin) ──────────────────
-const authMW = require('../middleware/auth')
+
 router.put('/:id', authMW, async (req, res) => {
   if (req.usuario.rol !== 'admin') return res.status(403).json({ error: 'Solo administradores' })
   try {

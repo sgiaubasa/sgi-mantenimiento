@@ -123,10 +123,29 @@ function iniciarDashboard() {
 function aplicarFiltroEstaciones() {
   if (!usuarioActual) return
   const estaciones = usuarioActual.estaciones || []
-  if (estaciones.length === 0) return
-  document.querySelectorAll('#estacion-manual').forEach(sel => {
-    Array.from(sel.options).forEach(opt => {
-      if (opt.value && !estaciones.includes(opt.value)) opt.remove()
+  if (usuarioActual.rol === 'admin' || estaciones.includes('Todas')) return
+  
+  // Selectores a filtrar
+  const selectores = [
+    '#resumen-estacion', '#plan-estacion', '#estacion-manual',
+    '#hist-estacion', '#repo-estacion', '#dc-estacion', '#ip-estacion'
+  ];
+  
+  selectores.forEach(selector => {
+    document.querySelectorAll(selector).forEach(sel => {
+      Array.from(sel.options).forEach(opt => {
+        // Ignoramos opciones vacías como "Todas las estaciones" si es que la dejamos, 
+        // pero el requerimiento es que ni las vea. Mejor ocultar todo lo que no está.
+        // Solo dejamos la opción con value "" (Todas) si aplica, pero si no tiene "Todas",
+        // es mejor forzar la primera que tenga.
+        if (opt.value && !estaciones.includes(opt.value)) {
+            opt.remove();
+        }
+      })
+      // Si la opción seleccionada quedó eliminada o vacía, seleccionar la primera válida
+      if (sel.options.length > 0 && !sel.value) {
+          sel.value = sel.options[0].value;
+      }
     })
   })
 }
@@ -922,7 +941,7 @@ async function loadUsuarios() {
             <td><span class="rol-badge rol-${u.rol}">${roles[u.rol] || u.rol}</span></td>
             <td>${u.estaciones?.length ? u.estaciones.join(', ') : 'Todas'}</td>
             <td><span class="${u.activo ? 'badge-activo' : 'badge-inactivo'}">${u.activo ? 'Activo' : 'Inactivo'}</span></td>
-            <td><button class="btn-secondary btn-sm" onclick="editarUsuario('${u._id}','${escHtml(u.nombre)}','${u.email}','${u.rol}',${JSON.stringify(u.estaciones||[])},${u.activo})">Editar</button></td>
+            <td><button class="btn-secondary btn-sm" onclick="editarUsuario('${u._id}','${escHtml(u.nombre)}','${u.email}','${u.rol}',${JSON.stringify(u.estaciones||[]).replace(/\"/g, '&quot;')},${u.activo})">Editar</button></td>
           </tr>`).join('')}
         </tbody>
       </table>`

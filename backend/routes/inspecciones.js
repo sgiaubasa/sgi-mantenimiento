@@ -521,7 +521,7 @@ router.get('/:id/evidencia', authMW, async (req, res) => {
 })
 
 // ─── GET / ───────────────────────────────────────────────────────────────────
-router.get('/', async (req, res) => {
+router.get('/', authMW, async (req, res) => {
   try {
     const { estacion, desde, hasta, tipo, fallas, prefix } = req.query
     const filter = {}
