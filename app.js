@@ -1060,7 +1060,7 @@ async function loadCumplimiento() {
         html += `<div class="plan-card" style="border:2px dashed #F79009;background:#FFFBEB">
           <div class="plan-card-header">
             <div>
-              <span class="plan-equipo-nombre" style="color:#92400E">${item.equipo || 'Ítem sin nombre'}</span>
+              <span class="plan-equipo-nombre" style="color:#92400E">${item.equipo || 'Ítem sin nombre'} ${item.estacion ? '<span style="font-size:12px;font-weight:normal;margin-left:4px;">(' + item.estacion + ')</span>' : ''}</span>
               <span style="font-size:11px;color:#F79009;font-weight:600;margin-left:8px">⚠ Sin ítems configurados</span>
             </div>
             <div style="display:flex;gap:8px">
@@ -1101,7 +1101,7 @@ async function loadCumplimiento() {
       html += `<div class="plan-card">
         <div class="plan-card-header">
           <div>
-            <span class="plan-equipo-nombre">${item.equipo}</span>
+            <span class="plan-equipo-nombre">${item.equipo} ${item.estacion ? '<span style="font-size:12px;color:var(--text-secondary);font-weight:normal;margin-left:4px;">(' + item.estacion + ')</span>' : ''}</span>
             ${item.codigoPrefix ? `<span class="plan-codigo-badge">${item.codigoPrefix}</span>` : ''}
           </div>
           <div style="display:flex;align-items:center;gap:8px">
